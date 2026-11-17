@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex,nofollow">
+<title>Siêu Ads · Thử đọc Sheet riêng tư</title>
+<style>
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172033;background:#f6f7fb;line-height:1.5}*{box-sizing:border-box}body{margin:0}main{max-width:1120px;margin:auto;padding:32px 20px 64px}h1{font-size:26px;line-height:1.25;margin:8px 0 12px}h2{font-size:18px;margin:0 0 16px}p{margin:8px 0 16px}.muted,small{color:#59657b}.badge{display:inline-block;background:#e9e7ff;color:#4338ca;border-radius:20px;padding:4px 12px;font-size:13px;font-weight:700}.card{background:white;border:1px solid #dde2ec;border-radius:14px;padding:22px;margin-top:18px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.grid .card{min-width:0}label{display:block;font-size:14px;font-weight:650;margin-bottom:8px}input{font:inherit;width:100%;border:1px solid #bec8da;border-radius:8px;padding:11px 12px;background:white}input:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid #a5b4fc;outline-offset:2px}button{font:inherit;font-weight:650;cursor:pointer;border:1px solid #cdd4e2;background:white;color:#263249;padding:10px 15px;border-radius:9px}button.primary{background:#4f46e5;color:white;border-color:#4f46e5}button:disabled{opacity:.5;cursor:not-allowed}.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}.notice{padding:12px 14px;border-radius:8px;background:#f0f3f9;white-space:pre-wrap;overflow-wrap:anywhere}.notice[data-tone="error"]{background:#fff0f1;color:#a11434}.notice[data-tone="ok"]{background:#eaf8f0;color:#14623a}.result{margin-top:16px}.table-wrap{overflow-x:auto;border:1px solid #dce2ed;border-radius:8px;margin-top:12px}table{border-collapse:collapse;min-width:100%;font-size:13px}td,th{border-bottom:1px solid #e4e8f0;border-right:1px solid #e4e8f0;text-align:left;padding:8px;min-width:100px;vertical-align:top}th{background:#f6f8fc}th:first-child{min-width:42px}td{white-space:pre-wrap;overflow-wrap:anywhere;max-width:340px}summary{cursor:pointer;font-weight:650}code{background:#edf0f8;padding:2px 5px;overflow-wrap:anywhere}li{margin:10px 0}a{color:#4338ca}.privacy{font-size:14px;margin-top:16px}footer{margin-top:24px;font-size:13px;color:#59657b}@media(max-width:740px){.grid{grid-template-columns:1fr}main{padding:24px 12px}.card{padding:16px}h1{font-size:23px}}
+</style>
+</head>
+<body>
+<main>
+<span class="badge">Bản thử · Chỉ đọc</span>
+<h1>Đọc Sheet công ty bằng quyền Google của bạn</h1>
+<p class="muted">Kiểm tra kết nối trước khi đưa vào Đồng bộ Kho. Mỗi lần bấm chỉ đọc vùng A1:T20 của tab được chọn; không cập nhật Catalog hay cấu hình Siêu Ads.</p>
+<section class="card" aria-labelledby="connect-title">
+<h2 id="connect-title">1. Kết nối Google</h2>
+<label for="client-id">OAuth Client ID · loại Web application</label>
+<input id="client-id" type="text" placeholder="…apps.googleusercontent.com" autocomplete="off" spellcheck="false">
+<div class="actions"><button id="connect" class="primary" disabled>Chọn tài khoản Google &amp; cấp quyền</button><button id="disconnect" disabled>Ngắt kết nối &amp; thu hồi quyền</button><button id="clear">Xóa dữ liệu thử trên màn hình</button></div>
+<p id="auth-status" class="notice" role="status" aria-live="polite">Đang tải thư viện xác thực Google…</p>
+<p class="privacy">Quyền <code>spreadsheets.readonly</code> của Google cho phép đọc mọi Google Sheet mà tài khoản có quyền truy cập. Bản thử này chỉ gọi hai file bạn nhập và vùng A1:T20. Token và nội dung đọc được chỉ giữ trong bộ nhớ trang, không lưu vào trình duyệt hay kho mã. Không cần Client Secret hoặc API key.</p>
+</section>
+<div class="grid">
+<section class="card" aria-labelledby="cd-title"><h2 id="cd-title">2. CĐ Tiểu học</h2><label for="cd-link">Link Google Sheet có gid của tab</label><input id="cd-link" type="url" placeholder="https://docs.google.com/spreadsheets/d/…/edit?gid=…" autocomplete="off" spellcheck="false"><div class="actions"><button id="cd-read" class="primary" disabled>Đọc thử tối đa 20 dòng</button></div><div id="cd-result" class="result" role="status" aria-live="polite"></div></section>
+<section class="card" aria-labelledby="mess-title"><h2 id="mess-title">3. MESS Gia sư</h2><label for="mess-link">Link Google Sheet có gid của tab</label><input id="mess-link" type="url" placeholder="https://docs.google.com/spreadsheets/d/…/edit?gid=…" autocomplete="off" spellcheck="false"><div class="actions"><button id="mess-read" class="primary" disabled>Đọc thử tối đa 20 dòng</button></div><div id="mess-result" class="result" role="status" aria-live="polite"></div></section>
+</div>
+<details class="card"><summary>Tạo Client ID một lần</summary><ol>
+<li>Trong Google Cloud, tạo dự án và bật <strong>Google Sheets API</strong>.</li>
+<li>Google Auth Platform → Branding: đặt tên <strong>Siêu Ads thử đọc Sheet</strong> và email hỗ trợ. Audience: nếu dùng nhiều Gmail, chọn <strong>External</strong>, để chế độ <strong>Testing</strong>, thêm đúng email được cấp quyền Sheet vào <strong>Test users</strong>. Nếu công ty quản lý Google Workspace, có thể cần quản trị viên cho phép ứng dụng.</li>
+<li>Data Access: thêm duy nhất <code>https://www.googleapis.com/auth/spreadsheets.readonly</code>.</li>
+<li>Clients → Create client → <strong>Web application</strong>. Authorized JavaScript origins: <code>https://leducttho-hash.github.io</code>. Không thêm đường dẫn <code>/sieu-ads-v3/</code>. Bản thử dùng popup, không cần Redirect URI.</li>
+<li>Dán <strong>Client ID</strong> vào ô trên. Mở bản thử qua HTTPS GitHub Pages; không mở bằng <code>file://</code>. Bấm kết nối và chọn đúng tài khoản đã có quyền đọc Sheet.</li>
+<li>Dán hai link, bấm đọc thử từng file. Chỉ sau khi cả hai đọc đúng tab và dữ liệu thì mới tích hợp vào Đồng bộ Kho.</li>
+</ol><p><a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer">Mở Google Cloud</a> · <a href="https://developers.google.com/identity/oauth2/web/guides/use-token-model" target="_blank" rel="noopener noreferrer">Tài liệu xác thực Google</a></p></details>
+<footer>Bản thử không dùng Vercel Function, không tự đồng bộ nền. Hồ sơ Thọ / My / Huyền trong Siêu Ads là cấu hình làm việc; tài khoản Google đọc Sheet được chọn riêng trong popup.</footer>
+</main>
+<script>
+(() => {
+  'use strict';
+  const SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly';
+  const API = 'https://sheets.googleapis.com/v4/spreadsheets/';
+  const $ = id => document.getElementById(id);
+  let accessToken = '', expiresAt = 0, busy = false, authPending = false;
+  let generation = 0, sdkReady = false;
+  const controllers = new Set();
+  const clientValid = () => /^[\w-]+\.apps\.googleusercontent\.com$/.test($('client-id').value.trim());
+  const connected = () => Boolean(accessToken) && Date.now() < expiresAt;
+  function notice(node, message, tone = '') {
+    node.replaceChildren();
+    const p = document.createElement('p');
+    p.className = 'notice'; p.dataset.tone = tone; p.textContent = message;
+    node.append(p);
+  }
+  function status(message, tone = '') {
+    $('auth-status').textContent = message; $('auth-status').dataset.tone = tone;
+  }
+  function refresh() {
+    $('connect').disabled = !sdkReady || !clientValid() || busy || authPending;
+    $('disconnect').disabled = !accessToken;
+    for (const key of ['cd','mess']) $(''+key+'-read').disabled = !connected() || busy || authPending;
+  }
+  function cancel() {
+    generation++;
+    for (const controller of controllers) controller.abort();
+    controllers.clear(); busy = false;
+  }
+  function clearResults() {
+    for (const key of ['cd','mess']) $(key+'-result').replaceChildren();
+  }
+  function forget(message) {
+    cancel(); accessToken = ''; expiresAt = 0; authPending = false;
+    clearResults(); if (message) status(message); refresh();
+  }
+  function parseLink(value) {
+    let url;
+    try { url = new URL(value.trim()); } catch { throw new Error('Dán link Google Sheet đầy đủ, có gid của tab.'); }
+    if (url.protocol !== 'https:' || url.hostname !== 'docs.google.com' || url.port || url.username || url.password)
+      throw new Error('Chỉ nhận link HTTPS từ docs.google.com/spreadsheets/d/…');
+    const match = url.pathname.match(/^\/spreadsheets\/d\/([A-Za-z0-9_-]+)(?:\/|$)/);
+    const fragment = new URLSearchParams(url.hash.slice(1));
+    const gid = fragment.get('gid') ?? url.searchParams.get('gid');
+    if (!match || gid === null || !/^\d+$/.test(gid) || !Number.isSafeInteger(Number(gid)))
+      throw new Error('Link cần có ID file và gid hợp lệ của tab. Hãy copy link khi đang mở đúng tab Sheet.');
+    return { id: match[1], gid: Number(gid) };
+  }
+  function apiError(statusCode, body) {
+    const code = body?.error?.status;
+    if (statusCode === 401) { forget('Quyền truy cập đã hết hạn. Bấm kết nối lại Google.'); return new Error('Quyền truy cập đã hết hạn. Hãy kết nối lại.'); }
+    if (statusCode === 403) return new Error('Google từ chối quyền đọc (403). Kiểm tra đúng tài khoản, đã bật Sheets API, đã cấp quyền readonly và chính sách công ty. Không cần mở Public file.');
+    if (statusCode === 404) return new Error('Google không tìm thấy hoặc không cho tài khoản này xem file (404). Kiểm tra link và quyền truy cập.');
+    if (code === 'FAILED_PRECONDITION') return new Error('Google Sheets API chưa hỗ trợ file này. Kiểm tra đây có phải Google Sheet gốc hay file Excel .xlsx trên Drive.');
+    if (statusCode === 429) return new Error('Google đang giới hạn tần suất (429). Chờ một lúc rồi bấm thử lại. Trang không tự thử lại.');
+    return new Error('Chưa đọc được dữ liệu từ Google (HTTP '+statusCode+'). Kiểm tra cấu hình Google và thử lại.');
+  }
+  async function getJSON(url, ticket) {
+    if (ticket !== generation || !connected()) throw new Error('Kết nối đã thay đổi hoặc hết hạn. Bấm kết nối lại trước khi đọc.');
+    const controller = new AbortController(); controllers.add(controller);
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    try {
+      const response = await fetch(url, {method:'GET',headers:{Authorization:'Bearer '+accessToken},credentials:'omit',cache:'no-store',redirect:'error',referrerPolicy:'no-referrer',signal:controller.signal});
+      if (ticket !== generation) throw new DOMException('Canceled','AbortError');
+      let body;
+      try { body = await response.json(); } catch { throw new Error('Google không trả về dữ liệu JSON hợp lệ. Kiểm tra mạng và cấu hình API.'); }
+      if (!response.ok) throw apiError(response.status, body);
+      return body;
+    } finally { clearTimeout(timeout); controllers.delete(controller); }
+  }
+  function renderResult(node, metadata, sheet, body) {
+    node.replaceChildren();
+    const values = Array.isArray(body.values) ? body.values.slice(0,20).map(row => Array.isArray(row) ? row.slice(0,20) : []) : [];
+    const title = document.createElement('p'); title.className = 'notice'; title.dataset.tone = 'ok';
+    title.textContent = 'Đọc thành công: '+(metadata.properties?.title || 'Google Sheet')+' → '+sheet.title+' (gid '+sheet.sheetId+'). Vùng A1:T20 · '+values.length+' dòng có dữ liệu trả về.';
+    node.append(title);
+    if (!values.length) { const p=document.createElement('p');p.textContent='Vùng thử đang trống. Chưa kết luận Catalog có dữ liệu.';node.append(p);return; }
+    const wrap=document.createElement('div');wrap.className='table-wrap';wrap.tabIndex=0;wrap.setAttribute('role','region');wrap.setAttribute('aria-label','Dữ liệu 20 dòng thử');
+    const table=document.createElement('table'), head=document.createElement('thead'), hr=document.createElement('tr'), tbody=document.createElement('tbody');
+    const columns=Math.max(1,...values.map(row=>row.length));
+    for(let col=-1;col<columns;col++){const th=document.createElement('th');th.scope='col';th.textContent=col<0?'#':String.fromCharCode(65+col);hr.append(th);}
+    head.append(hr);table.append(head);
+    values.forEach((row,index)=>{const tr=document.createElement('tr'),label=document.createElement('th');label.scope='row';label.textContent=String(index+1);tr.append(label);for(let col=0;col<columns;col++){const td=document.createElement('td');td.textContent=String(row[col]??'');tr.append(td);}tbody.append(tr);});
+    table.append(tbody);wrap.append(table);node.append(wrap);
+  }
+  async function read(key) {
+    if (busy || authPending) return;
+    const node=$(key+'-result');
+    if (!connected()) { forget('Kết nối Google chưa có hoặc đã hết hạn. Bấm kết nối lại.'); return; }
+    let source;
+    try { source=parseLink($(key+'-link').value); } catch(error) { notice(node,error.message,'error');return; }
+    const ticket=generation;busy=true;refresh();notice(node,'Đang đọc thông tin tab và tối đa 20 dòng…');
+    try {
+      const metaURL=new URL(API+encodeURIComponent(source.id));
+      metaURL.searchParams.set('fields','properties(title),sheets(properties(sheetId,title))');
+      const metadata=await getJSON(metaURL.href,ticket);
+      const sheet=metadata.sheets?.map(s=>s.properties).find(s=>s?.sheetId===source.gid);
+      if (!sheet || typeof sheet.title!=='string') throw new Error('Không tìm thấy gid của tab trong file. Copy lại link đúng tab cần đọc.');
+      const range="'"+sheet.title.replace(/'/g,"''")+"'!A1:T20";
+      const valuesURL=new URL(API+encodeURIComponent(source.id)+'/values/'+encodeURIComponent(range));
+      valuesURL.searchParams.set('valueRenderOption','FORMATTED_VALUE');
+      valuesURL.searchParams.set('majorDimension','ROWS');
+      const body=await getJSON(valuesURL.href,ticket);
+      if (ticket===generation) renderResult(node,metadata,sheet,body);
+    } catch(error) {
+      if (ticket===generation) notice(node,error.name==='AbortError'?'Yêu cầu quá thời gian. Bấm thử lại khi mạng ổn định.':error instanceof TypeError?'Không kết nối được Google. Kiểm tra mạng hoặc tiện ích chặn yêu cầu rồi bấm thử lại.':error.message,'error');
+    } finally { if(ticket===generation){busy=false;refresh();} }
+  }
+  $('connect').addEventListener('click',()=>{
+    if(!sdkReady || !clientValid() || authPending || busy)return;
+    forget();authPending=true;refresh();status('Chọn đúng tài khoản Google đã được cấp quyền đọc Sheet…');
+    const ticket=generation;
+    try {
+      const client=google.accounts.oauth2.initTokenClient({client_id:$('client-id').value.trim(),scope:SCOPE,include_granted_scopes:false,
+        callback:response=>{
+          if(ticket!==generation)return;
+          authPending=false;
+          if(response.error || !response.access_token){status('Chưa cấp quyền đọc. Kiểm tra Test users / consent / chính sách công ty rồi kết nối lại.','error');refresh();return;}
+          if(!google.accounts.oauth2.hasGrantedAllScopes(response,SCOPE)){status('Bạn chưa cấp quyền đọc Google Sheets. Hãy kết nối lại và kiểm tra quyền.','error');refresh();return;}
+          const lifetime=Number(response.expires_in);
+          if(!Number.isFinite(lifetime)||lifetime<=30){status('Token không có thời hạn hợp lệ. Hãy kết nối lại.','error');refresh();return;}
+          accessToken=response.access_token;expiresAt=Date.now()+(lifetime-30)*1000;
+          status('Đã cấp quyền. Dán link và bấm đọc thử từng kho. Token được xóa khi tải lại hoặc rời trang.','ok');refresh();
+        },error_callback:()=>{if(ticket!==generation)return;authPending=false;status('Popup đã đóng hoặc bị chặn. Cho phép popup cho trang này rồi bấm kết nối lại.','error');refresh();}});
+      client.requestAccessToken({prompt:'select_account'});
+    } catch { authPending=false;status('Chưa mở được xác thực Google. Kiểm tra Client ID và tải lại trang.','error');refresh(); }
+  });
+  $('disconnect').addEventListener('click',()=>{
+    const token=accessToken;forget('Đã xóa kết nối và dữ liệu đọc trong trang. Đang thu hồi quyền tại Google…');
+    const ticket=generation;
+    try { google.accounts.oauth2.revoke(token,response=>{if(ticket!==generation)return;status(response?.successful?'Đã thu hồi quyền tại Google.':'Đã xóa kết nối cục bộ. Chưa xác minh thu hồi quyền; có thể quản lý tại myaccount.google.com/connections.');}); }
+    catch { status('Đã xóa kết nối cục bộ. Chưa xác minh thu hồi quyền; có thể quản lý tại myaccount.google.com/connections.'); }
+  });
+  $('clear').addEventListener('click',()=>{cancel();authPending=false;clearResults();for(const key of ['cd','mess'])$(key+'-link').value='';status(connected()?'Đã xóa dữ liệu thử. Kết nối Google vẫn còn hiệu lực.':'Đã xóa dữ liệu thử. Hãy kết nối Google khi cần.');refresh();});
+  $('client-id').addEventListener('input',()=>forget('Client ID đã thay đổi. Bấm kết nối Google để thử.'));
+  for(const key of ['cd','mess']){
+    $(key+'-read').addEventListener('click',()=>read(key));
+    $(key+'-link').addEventListener('input',()=>{cancel();authPending=false;clearResults();refresh();});
+  }
+  window.addEventListener('pagehide',()=>forget());
+  const sdk=document.createElement('script');sdk.src='https://accounts.google.com/gsi/client';sdk.async=true;
+  sdk.onload=()=>{sdkReady=Boolean(window.google?.accounts?.oauth2);status(sdkReady?'Dán OAuth Client ID rồi bấm kết nối Google.':'Chưa tải được xác thực Google. Tải lại trang.');refresh();};
+  sdk.onerror=()=>{status('Không tải được thư viện Google. Kiểm tra mạng / tiện ích chặn rồi tải lại trang.','error');};
+  document.head.append(sdk);
+})();
+</script>
+</body>
+</html>
