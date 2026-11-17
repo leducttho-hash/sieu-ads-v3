@@ -138,7 +138,7 @@
     if(ticket!==generation)return Promise.reject(new DOMException('Canceled','AbortError'));
     if(typeof Worker!=='function')return Promise.reject(new Error('Trình duyệt chưa hỗ trợ tác vụ đọc Excel. Hãy dùng Chrome phiên bản mới.'));
     return new Promise((resolve,reject)=>{
-      let worker;try{worker=new Worker('./excel-preview-worker.js?v=2');}catch{reject(new Error('Không mở được tác vụ đọc Excel. Tải lại trang rồi thử lại.'));return;}
+      let worker;try{worker=new Worker('./excel-preview-worker.js?v=4');}catch{reject(new Error('Không mở được tác vụ đọc Excel. Tải lại trang rồi thử lại.'));return;}
       let timer,done=false;
       const finish=(error,data)=>{if(done)return;done=true;clearTimeout(timer);worker.terminate();parsers.delete(task);error?reject(error):resolve(data);};
       const task={cancel:()=>finish(new DOMException('Canceled','AbortError'))};parsers.add(task);
@@ -176,7 +176,15 @@
     title.textContent = 'Đọc thành công: '+(metadata.properties?.title || 'Google Sheet')+' → '+sheet.title+(sheet.excel?' (Excel .xlsx)':' (gid '+sheet.sheetId+')')+'. Vùng A1:T20 · '+values.length+' dòng trả về (có thể gồm dòng trống).';
     node.append(title);
     if(sheet.excel){const hint=document.createElement('p');hint.className='muted';hint.textContent='Đã tải cả workbook vào bộ nhớ; chỉ hiển thị vùng thử. Công thức dùng kết quả đã lưu trong file, không tính lại.';node.append(hint);}
-    if(body.stats?.missingFormula || body.stats?.cellErrors){const warning=document.createElement('p');warning.className='notice';warning.dataset.tone='error';warning.textContent='Cần kiểm tra trong vùng thử: '+(body.stats.missingFormula||0)+' công thức chưa có kết quả lưu; '+(body.stats.cellErrors||0)+' ô báo lỗi. Chưa nên coi dữ liệu đã sẵn sàng để đồng bộ.';node.append(warning);}
+    if(body.stats?.missingFormula || body.stats?.cellErrors){
+      const warning=document.createElement('div');warning.className='notice';warning.dataset.tone='error';
+      const message=document.createElement('p');message.textContent='Cần kiểm tra trong vùng thử: '+(body.stats.missingFormula||0)+' ô chưa đọc được kết quả công thức đã lưu; '+(body.stats.cellErrors||0)+' ô báo lỗi. Cần đối chiếu các ô này với cột dùng để đồng bộ; cảnh báo chưa có nghĩa cả nguồn bị lỗi.';warning.append(message);
+      const list=document.createElement('ul');
+      for(const item of Array.isArray(body.stats.missingFormulaCells)?body.stats.missingFormulaCells:[]){const li=document.createElement('li');li.textContent='Ô '+String(item.address??'?')+' · '+(item.formula?'Công thức: ='+String(item.formula):item.sharedFormula?'Công thức dùng chung từ ô '+String(item.sharedFormula):'Chưa đọc được công thức');list.append(li);}
+      for(const item of Array.isArray(body.stats.errorCells)?body.stats.errorCells:[]){const li=document.createElement('li');li.textContent='Ô '+String(item.address??'?')+' · Lỗi trong file: '+String(item.error??'');list.append(li);}
+      if(list.children.length)warning.append(list);else{const hint=document.createElement('p');hint.textContent='Chưa có địa chỉ ô. Tải lại trang rồi đọc lại để nhận bản chẩn đoán mới.';warning.append(hint);}
+      node.append(warning);
+    }
     if (!values.length) { const p=document.createElement('p');p.textContent='Vùng thử đang trống. Chưa kết luận Catalog có dữ liệu.';node.append(p);return; }
     const wrap=document.createElement('div');wrap.className='table-wrap';wrap.tabIndex=0;wrap.setAttribute('role','region');wrap.setAttribute('aria-label','Dữ liệu 20 dòng thử');
     const table=document.createElement('table'), head=document.createElement('thead'), hr=document.createElement('tr'), tbody=document.createElement('tbody');

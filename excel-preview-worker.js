@@ -18,16 +18,16 @@ function checkArchive(buffer){
     if(p>offset+directorySize)throw Error('INVALID_FILE');
   }
 }
-function plain(value,stats,depth=0){
+function plain(value,stats,depth=0,address=''){
   if(value===null||value===undefined)return '';
   if(depth>4)return '';
   if(value instanceof Date)return Number.isFinite(value.getTime())?new Intl.DateTimeFormat('vi-VN',{timeZone:'UTC'}).format(value):'';
   if(typeof value==='string'||typeof value==='number'||typeof value==='boolean')return String(value);
   if(typeof value==='object'){
-    if('formula' in value||'sharedFormula' in value){if(value.result===undefined||value.result===null){stats.missingFormula++;return '[Công thức chưa có kết quả lưu]';}return plain(value.result,stats,depth+1);}
+    if('formula' in value||'sharedFormula' in value){if(value.result===undefined||value.result===null){stats.missingFormula++;stats.missingFormulaCells.push({address,formula:String(value.formula??'').slice(0,500),sharedFormula:String(value.sharedFormula??'')});return '[Chưa đọc được kết quả công thức]';}return plain(value.result,stats,depth+1,address);}
     if(Array.isArray(value.richText))return value.richText.map(p=>p.text??'').join('');
     if('text' in value)return String(value.text??'');
-    if('error' in value){stats.cellErrors++;return String(value.error);}
+    if('error' in value){stats.cellErrors++;stats.errorCells.push({address,error:String(value.error)});return String(value.error);}
   }
   return '';
 }
@@ -39,10 +39,10 @@ self.onmessage=async event=>{
     const book=new ExcelJS.Workbook();await book.xlsx.load(buffer);
     const sheet=book.worksheets.find(s=>s.name===tabName.trim());
     if(!sheet){self.postMessage({ok:false,code:'TAB_NOT_FOUND',sheetNames:book.worksheets.map(s=>s.name)});return;}
-    const stats={missingFormula:0,cellErrors:0},values=[];
+    const stats={missingFormula:0,cellErrors:0,missingFormulaCells:[],errorCells:[]},values=[];
     const last=Math.min(20,sheet.actualRowCount?sheet.rowCount:0);
     for(let row=1;row<=last;row++){
-      const line=[];for(let col=1;col<=20;col++){const cell=sheet.getCell(row,col);let value=cell.value;if(value&&typeof value==='object'&&('formula' in value||'sharedFormula' in value))value={...value,result:cell.result};line.push(plain(value,stats));}
+      const line=[];for(let col=1;col<=20;col++){const cell=sheet.getCell(row,col);let value=cell.value;if(value&&typeof value==='object'&&('formula' in value||'sharedFormula' in value))value={...value,result:cell.result};line.push(plain(value,stats,0,cell.address));}
       values.push(line);
     }
     self.postMessage({ok:true,tabName:sheet.name,values,stats});
