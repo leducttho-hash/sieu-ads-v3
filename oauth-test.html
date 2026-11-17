@@ -19,13 +19,13 @@
 <h2 id="connect-title">1. Kết nối Google</h2>
 <label for="client-id">OAuth Client ID · loại Web application</label>
 <input id="client-id" type="text" placeholder="…apps.googleusercontent.com" autocomplete="off" spellcheck="false">
-<div class="actions"><button id="connect" class="primary" disabled>Chọn tài khoản Google &amp; cấp quyền</button><button id="connect-excel" disabled>Kết nối Google + đọc Excel trên Drive</button><button id="disconnect" disabled>Ngắt kết nối &amp; thu hồi quyền</button><button id="clear">Xóa dữ liệu thử trên màn hình</button></div>
-<p id="auth-status" class="notice" role="status" aria-live="polite">Đang tải thư viện xác thực Google…</p>
-<p class="privacy">Nút đầu xin quyền <code>spreadsheets.readonly</code> để đọc Google Sheets. Nút <strong>Kết nối Google + đọc Excel trên Drive</strong> xin thêm <code>drive.readonly</code>, cho phép đọc/tải các file trên Drive mà tài khoản có quyền truy cập. Bản thử chỉ gọi file bạn nhập, kiểm tra quyền tải trước khi lấy Excel, không sửa file. Token và nội dung chỉ giữ trong bộ nhớ, không ghi vào bộ nhớ lưu trữ trình duyệt, bản sao lưu hay kho mã. Không cần Client Secret hoặc API key.</p>
+<div class="actions"><button id="connect" class="primary" disabled>Chọn tài khoản Google &amp; cấp quyền</button><button id="connect-excel" disabled>Kết nối Google + đọc Excel trên Drive</button><button id="check-account" disabled>Kiểm tra tài khoản Drive</button><button id="disconnect" disabled>Ngắt kết nối &amp; thu hồi quyền</button><button id="clear">Xóa dữ liệu thử trên màn hình</button></div>
+<p id="auth-status" class="notice" role="status" aria-live="polite">Đang tải thư viện xác thực Google…</p><p id="drive-account" role="status" aria-live="polite" class="muted"></p>
+<p class="privacy">Nút đầu xin quyền <code>spreadsheets.readonly</code> để đọc Google Sheets. Nút <strong>Kết nối Google + đọc Excel trên Drive</strong> xin thêm <code>drive.readonly</code>, cho phép đọc/tải các file trên Drive mà tài khoản có quyền truy cập. Bản thử chỉ gọi file bạn nhập và thông tin tài khoản Drive khi bạn bấm kiểm tra; kiểm tra quyền tải trước khi lấy Excel, không sửa file. Token và nội dung chỉ giữ trong bộ nhớ, không ghi vào bộ nhớ lưu trữ trình duyệt, bản sao lưu hay kho mã. Không cần Client Secret hoặc API key.</p>
 </section>
 <div class="grid">
-<section class="card" aria-labelledby="cd-title"><h2 id="cd-title">2. CĐ Tiểu học</h2><label for="cd-link">Link Google Sheet có gid của tab</label><input id="cd-link" type="url" placeholder="https://docs.google.com/spreadsheets/d/…/edit?gid=…" autocomplete="off" spellcheck="false"><label for="cd-mode">Loại nguồn</label><select id="cd-mode"><option value="sheets">Google Sheet gốc · chọn theo gid</option><option value="xlsx" selected>Excel .xlsx trên Drive · chọn theo tên tab</option></select><div id="cd-excel-options"><label for="cd-tab" style="margin-top:12px">Tên tab Excel · nhập chính xác</label><input id="cd-tab" value="Caption" placeholder="Tên tab trong workbook" autocomplete="off" spellcheck="false"><small>Đọc Excel theo tên tab; không suy ra từ gid. Theo file bạn cung cấp: Caption · Header hàng 3 · Mã B / Body C / Media D / MIX F / Page E.</small></div><div class="actions"><button id="cd-read" class="primary" disabled>Đọc thử tối đa 20 dòng</button></div><div id="cd-result" class="result" role="status" aria-live="polite"></div></section>
-<section class="card" aria-labelledby="mess-title"><h2 id="mess-title">3. MESS Gia sư</h2><label for="mess-link">Link Google Sheet có gid của tab</label><input id="mess-link" type="url" placeholder="https://docs.google.com/spreadsheets/d/…/edit?gid=…" autocomplete="off" spellcheck="false"><label for="mess-mode">Loại nguồn</label><select id="mess-mode"><option value="sheets" selected>Google Sheet gốc · chọn theo gid</option><option value="xlsx">Excel .xlsx trên Drive · chọn theo tên tab</option></select><div id="mess-excel-options" hidden><label for="mess-tab" style="margin-top:12px">Tên tab Excel · nhập chính xác</label><input id="mess-tab" value="" placeholder="Tên tab trong workbook" autocomplete="off" spellcheck="false"><small>Đọc Excel theo tên tab; không suy ra từ gid. </small></div><div class="actions"><button id="mess-read" class="primary" disabled>Đọc thử tối đa 20 dòng</button></div><div id="mess-result" class="result" role="status" aria-live="polite"></div></section>
+<section class="card" aria-labelledby="cd-title"><h2 id="cd-title">2. CĐ Tiểu học</h2><label for="cd-link">Link Google Sheet / link chia sẻ Drive</label><input id="cd-link" type="url" placeholder="https://docs.google.com/spreadsheets/d/…/edit?gid=…" autocomplete="off" spellcheck="false"><label for="cd-mode">Loại nguồn</label><select id="cd-mode"><option value="sheets">Google Sheet gốc · chọn theo gid</option><option value="xlsx" selected>Excel .xlsx trên Drive · chọn theo tên tab</option></select><div id="cd-excel-options"><label for="cd-tab" style="margin-top:12px">Tên tab Excel · nhập chính xác</label><input id="cd-tab" value="Caption" placeholder="Tên tab trong workbook" autocomplete="off" spellcheck="false"><small>Với Excel, có thể dùng Chia sẻ → Sao chép đường liên kết từ Drive. Giữ nguyên resourcekey nếu link có sẵn. Đọc theo tên tab; không suy ra từ gid. Theo file bạn cung cấp: Caption · Header hàng 3 · Mã B / Body C / Media D / MIX F / Page E.</small></div><div class="actions"><button id="cd-read" class="primary" disabled>Đọc thử tối đa 20 dòng</button></div><div id="cd-result" class="result" role="status" aria-live="polite"></div></section>
+<section class="card" aria-labelledby="mess-title"><h2 id="mess-title">3. MESS Gia sư</h2><label for="mess-link">Link Google Sheet / link chia sẻ Drive</label><input id="mess-link" type="url" placeholder="https://docs.google.com/spreadsheets/d/…/edit?gid=…" autocomplete="off" spellcheck="false"><label for="mess-mode">Loại nguồn</label><select id="mess-mode"><option value="sheets" selected>Google Sheet gốc · chọn theo gid</option><option value="xlsx">Excel .xlsx trên Drive · chọn theo tên tab</option></select><div id="mess-excel-options" hidden><label for="mess-tab" style="margin-top:12px">Tên tab Excel · nhập chính xác</label><input id="mess-tab" value="" placeholder="Tên tab trong workbook" autocomplete="off" spellcheck="false"><small>Đọc Excel theo tên tab; không suy ra từ gid. </small></div><div class="actions"><button id="mess-read" class="primary" disabled>Đọc thử tối đa 20 dòng</button></div><div id="mess-result" class="result" role="status" aria-live="polite"></div></section>
 </div>
 <details class="card"><summary>Tạo Client ID một lần</summary><ol>
 <li>Trong Google Cloud, tạo dự án và bật <strong>Google Sheets API</strong>.</li>
@@ -64,11 +64,13 @@
   function refresh() {
     $('connect').disabled = !sdkReady || !clientValid() || busy || authPending;
     $('connect-excel').disabled = $('connect').disabled;
+    $('check-account').disabled = !connected() || !driveGranted || busy || authPending;
     $('disconnect').disabled = !accessToken;
     for (const key of ['cd','mess']) $(''+key+'-read').disabled = !connected() || busy || authPending;
   }
   function cancel() {
     generation++;
+    if($('drive-account').textContent.startsWith('Đang kiểm tra'))$('drive-account').textContent='';
     for (const controller of controllers) controller.abort();
     controllers.clear();
     for (const task of parsers) task.cancel();
@@ -79,19 +81,27 @@
   }
   function forget(message) {
     cancel(); accessToken = ''; expiresAt = 0; authPending = false; driveGranted = false;
-    clearResults(); if (message) status(message); refresh();
+    clearResults(); $('drive-account').textContent=''; if (message) status(message); refresh();
   }
-  function parseLink(value) {
+  function parseLink(value, excel = false) {
+    const text=value.trim();
+    if(excel && /^[A-Za-z0-9_-]{1,256}$/.test(text))return {id:text,gid:null,resourceKey:''};
     let url;
-    try { url = new URL(value.trim()); } catch { throw new Error('Dán link Google Sheet đầy đủ, có gid của tab.'); }
-    if (url.protocol !== 'https:' || url.hostname !== 'docs.google.com' || url.port || url.username || url.password)
-      throw new Error('Chỉ nhận link HTTPS từ docs.google.com/spreadsheets/d/…');
-    const match = url.pathname.match(/^\/spreadsheets\/d\/([A-Za-z0-9_-]+)(?:\/|$)/);
-    const fragment = new URLSearchParams(url.hash.slice(1));
-    const gid = fragment.get('gid') ?? url.searchParams.get('gid');
-    if (!match || gid === null || !/^\d+$/.test(gid) || !Number.isSafeInteger(Number(gid)))
-      throw new Error('Link cần có ID file và gid hợp lệ của tab. Hãy copy link khi đang mở đúng tab Sheet.');
-    return { id: match[1], gid: Number(gid) };
+    try{url=new URL(text);}catch{throw new Error(excel?'Dán link chia sẻ Drive hoặc link Google Sheet đầy đủ.':'Dán link Google Sheet đầy đủ, có gid của tab.');}
+    if(url.protocol!=='https:' || url.port || url.username || url.password || !['docs.google.com','drive.google.com'].includes(url.hostname))throw new Error('Chỉ nhận link HTTPS từ docs.google.com hoặc drive.google.com.');
+    let id='';
+    if(url.hostname==='docs.google.com')id=url.pathname.match(/^\/spreadsheets\/(?:u\/\d+\/)?d\/([A-Za-z0-9_-]+)(?:\/|$)/)?.[1] || '';
+    if(excel && url.hostname==='drive.google.com'){
+      id=url.pathname.match(/^\/file\/(?:u\/\d+\/)?d\/([A-Za-z0-9_-]+)(?:\/|$)/)?.[1] || '';
+      if(!id && /^\/(?:open|uc)$/.test(url.pathname))id=url.searchParams.get('id') || '';
+    }
+    if(!/^[A-Za-z0-9_-]{1,256}$/.test(id))throw new Error('Link chưa có ID file hợp lệ. Dùng Chia sẻ → Sao chép đường liên kết của đúng file gốc.');
+    const fragment=new URLSearchParams(url.hash.slice(1));
+    const gid=fragment.get('gid') ?? url.searchParams.get('gid');
+    if(!excel && (gid===null || !/^\d+$/.test(gid) || !Number.isSafeInteger(Number(gid))))throw new Error('Link Google Sheet cần có gid hợp lệ của tab. Copy link khi đang mở đúng tab Sheet.');
+    const resourceKey=url.searchParams.get('resourcekey') || url.searchParams.get('resourceKey') || fragment.get('resourcekey') || '';
+    if(resourceKey && !/^[A-Za-z0-9_-]{1,512}$/.test(resourceKey))throw new Error('Resource key trong link chưa hợp lệ. Copy lại nguyên link chia sẻ từ Google Drive.');
+    return {id,gid:gid===null?null:Number(gid),resourceKey};
   }
   function apiError(statusCode, body) {
     const code = body?.error?.status;
@@ -102,12 +112,14 @@
     if (statusCode === 429) return new Error('Google đang giới hạn tần suất (429). Chờ một lúc rồi bấm thử lại. Trang không tự thử lại.');
     return new Error('Chưa đọc được dữ liệu từ Google (HTTP '+statusCode+'). Kiểm tra cấu hình Google và thử lại.');
   }
-  async function request(url, ticket, binary = false) {
+  async function request(url, ticket, binary = false, resourceSource = null) {
     if (ticket !== generation || !connected()) throw new Error('Kết nối đã thay đổi hoặc hết hạn. Bấm kết nối lại trước khi đọc.');
     const controller = new AbortController(); controllers.add(controller);
     const timeout = setTimeout(() => controller.abort(), binary ? 60000 : 20000);
     try {
-      const response = await fetch(url, {method:'GET',headers:{Authorization:'Bearer '+accessToken},credentials:'omit',cache:'no-store',redirect:'error',referrerPolicy:'no-referrer',signal:controller.signal});
+      const headers={Authorization:'Bearer '+accessToken};
+      if(resourceSource?.resourceKey && new URL(url).origin==='https://www.googleapis.com')headers['X-Goog-Drive-Resource-Keys']=resourceSource.id+'/'+resourceSource.resourceKey;
+      const response = await fetch(url, {method:'GET',headers,credentials:'omit',cache:'no-store',redirect:'error',referrerPolicy:'no-referrer',signal:controller.signal});
       if (ticket !== generation) throw new DOMException('Canceled','AbortError');
       if (!response.ok) { let body; try { body=await response.json(); } catch {} throw apiError(response.status,body); }
       if (!binary) { try { return await response.json(); } catch { throw new Error('Google không trả về dữ liệu JSON hợp lệ. Kiểm tra mạng và cấu hình API.'); } }
@@ -121,7 +133,7 @@
       const bytes=new Uint8Array(total);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}return bytes.buffer;
     } finally { clearTimeout(timeout); controllers.delete(controller); }
   }
-  const getJSON=(url,ticket)=>request(url,ticket,false);
+  const getJSON=(url,ticket,source=null)=>request(url,ticket,false,source);
   function parseExcel(buffer, tabName, ticket) {
     if(ticket!==generation)return Promise.reject(new DOMException('Canceled','AbortError'));
     if(typeof Worker!=='function')return Promise.reject(new Error('Trình duyệt chưa hỗ trợ tác vụ đọc Excel. Hãy dùng Chrome phiên bản mới.'));
@@ -142,14 +154,16 @@
     if(!driveGranted)throw new Error('Bấm “Kết nối Google + đọc Excel trên Drive” để cấp quyền đọc Excel, rồi thử lại.');
     const tabName=$(key+'-tab').value.trim();if(!tabName)throw new Error('Nhập tên tab Excel trước khi đọc.');
     const url=new URL(DRIVE_API+encodeURIComponent(source.id));url.searchParams.set('supportsAllDrives','true');url.searchParams.set('fields','id,name,mimeType,size,capabilities(canDownload)');
-    const metadata=await getJSON(url.href,ticket);
+    let metadata;
+    try{metadata=await getJSON(url.href,ticket,source);}catch(error){if(error.name==='AbortError')throw error;throw new Error('Bước đọc thông tin file trên Drive: '+error.message+' ID đang kiểm tra: '+source.id+'. Nếu email đã đúng, copy lại link bằng Chia sẻ → Sao chép đường liên kết của file gốc.');}
     if(metadata.mimeType!=='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')throw new Error('Nguồn được chọn chưa phải Excel .xlsx. Với Google Sheet gốc, đổi Loại nguồn sang Google Sheet.');
     if(metadata.capabilities?.canDownload!==true)throw new Error('Tài khoản chưa được phép tải file Excel này. Hãy liên hệ người quản lý file; bản thử giữ nguyên quyền chia sẻ.');
     if(Number(metadata.size)>MAX_BYTES)throw new Error('File vượt giới hạn thử 20 MB. Chưa tải workbook.');
     if(ticket!==generation)throw new DOMException('Canceled','AbortError');
     notice(node,'Đã xác minh quyền tải. Đang tải workbook Excel vào bộ nhớ (tối đa 20 MB)…');
     const media=new URL(DRIVE_API+encodeURIComponent(source.id));media.searchParams.set('alt','media');media.searchParams.set('supportsAllDrives','true');
-    const buffer=await request(media.href,ticket,true);
+    let buffer;
+    try{buffer=await request(media.href,ticket,true,source);}catch(error){if(error.name==='AbortError')throw error;throw new Error('Đã tìm thấy file và xác minh quyền tải. Bước tải nội dung Excel: '+error.message);}
     if(ticket!==generation)throw new DOMException('Canceled','AbortError');
     notice(node,'Đã tải workbook. Đang đọc A1:T20 của tab '+tabName+'…');
     const data=await parseExcel(buffer,tabName,ticket);
@@ -177,7 +191,7 @@
     const node=$(key+'-result');
     if (!connected()) { forget('Kết nối Google chưa có hoặc đã hết hạn. Bấm kết nối lại.'); return; }
     let source;
-    try { source=parseLink($(key+'-link').value); } catch(error) { notice(node,error.message,'error');return; }
+    try { source=parseLink($(key+'-link').value,$(key+'-mode').value==='xlsx'); } catch(error) { notice(node,error.message,'error');return; }
     const ticket=generation;busy=true;refresh();notice(node,'Đang đọc thông tin tab và tối đa 20 dòng…');
     try {
       if($(key+'-mode').value==='xlsx'){
@@ -222,13 +236,22 @@
   }
   $('connect').addEventListener('click',()=>authorize(false));
   $('connect-excel').addEventListener('click',()=>authorize(true));
+  $('check-account').addEventListener('click',async()=>{
+    if(!connected() || !driveGranted || busy || authPending)return;
+    const ticket=generation;busy=true;refresh();$('drive-account').textContent='Đang kiểm tra tài khoản mà token Google đang dùng…';
+    try{
+      const data=await getJSON('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress%2CdisplayName)',ticket);
+      if(ticket===generation)$('drive-account').textContent=data.user?.emailAddress?'Tài khoản Drive đang dùng: '+data.user.emailAddress+'. So sánh với email khi bạn mở file trong Google.':'Google chưa trả về địa chỉ email tài khoản Drive. Chưa xác minh được tài khoản.';
+    }catch(error){if(ticket===generation)$('drive-account').textContent=error.name==='AbortError'?'Kiểm tra tài khoản quá thời gian. Bấm thử lại.':'Chưa xác minh tài khoản Drive: '+error.message;}
+    finally{if(ticket===generation){busy=false;refresh();}}
+  });
   $('disconnect').addEventListener('click',()=>{
     const token=accessToken;forget('Đã xóa kết nối và dữ liệu đọc trong trang. Đang thu hồi quyền tại Google…');
     const ticket=generation;
     try { google.accounts.oauth2.revoke(token,response=>{if(ticket!==generation)return;status(response?.successful?'Đã thu hồi quyền tại Google.':'Đã xóa kết nối cục bộ. Chưa xác minh thu hồi quyền; có thể quản lý tại myaccount.google.com/connections.');}); }
     catch { status('Đã xóa kết nối cục bộ. Chưa xác minh thu hồi quyền; có thể quản lý tại myaccount.google.com/connections.'); }
   });
-  $('clear').addEventListener('click',()=>{cancel();authPending=false;clearResults();for(const key of ['cd','mess'])$(key+'-link').value='';status(connected()?'Đã xóa dữ liệu thử. Kết nối Google vẫn còn hiệu lực.':'Đã xóa dữ liệu thử. Hãy kết nối Google khi cần.');refresh();});
+  $('clear').addEventListener('click',()=>{cancel();authPending=false;clearResults();$('drive-account').textContent='';for(const key of ['cd','mess'])$(key+'-link').value='';status(connected()?'Đã xóa dữ liệu thử. Kết nối Google vẫn còn hiệu lực.':'Đã xóa dữ liệu thử. Hãy kết nối Google khi cần.');refresh();});
   $('client-id').addEventListener('input',()=>forget('Client ID đã thay đổi. Bấm kết nối Google để thử.'));
   for(const key of ['cd','mess']){
     $(key+'-read').addEventListener('click',()=>read(key));
