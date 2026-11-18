@@ -9038,9 +9038,25 @@ function mapRawFiveRow(r,i,layout){
   o.row=i+1;
   return o;
 }
+// Cache identity follows the saved Registry document without changing user configuration.
+const _registryCacheIds=new WeakMap();let _registryCacheSerial=0;
+function registryCacheId(){const reg=registry();if(!_registryCacheIds.has(reg))_registryCacheIds.set(reg,++_registryCacheSerial);return _registryCacheIds.get(reg);}
+function uniqueCatalogHit(cd,code){
+  const hits=cd?.byCode.get(code)||[];
+  const exact=hits.filter(row=>row.mixCode===code);
+  const text=hits.filter(row=>!row.mediaCode&&row.contentCode===code);
+  const candidates=exact.length?exact:text.length?text:hits;
+  const identities=new Set(candidates.map(row=>row.mixCode||row.contentCode));
+  return identities.size===1?candidates[0]:null;
+}
+function fiveRowMixIdentity(row,layout=wh().layout){
+  const val=field=>{const i=layout.indexOf(field);return i<0?'':cleanCodeToken(row[i]);};
+  const content=val('contentCode'),media=val('mediaCode'),mix=val('mixCode');
+  return mix||(content&&media&&!content.endsWith(media)?content+media:content);
+}
 function getCachedCatData(cat,fallbackLayout){
   if(!cat?.rows?.length)return null;
-  const catLayout=cat.layout||fallbackLayout,ck=catLayout.join(',')+'|'+user().id+'|'+(user().localVersion||1);
+  const catLayout=cat.layout||fallbackLayout,ck=catLayout.join(',')+'|'+user().id+'|'+(user().localVersion||1)+'|'+registryCacheId();
   let map=_catRowCache.get(cat);
   if(!map){map=new Map();_catRowCache.set(cat,map);}
   if(map.has(ck))return map.get(ck);
@@ -9065,18 +9081,19 @@ function saveSharedCatalog(payload,wId=wh().id,ch=db.session.channel){const sk=k
 let _normMemo=null;
 function normalizedFive(){
   if(db.sourceScopeRepairs?.[key(wh().id,db.session.channel)]?.pending)return [];
-  const ws=workspace(),layout=wh().layout,cat=sharedCatalog(),wsFp=scopeKey()+'|'+JSON.stringify(ws.fiveRows)+'|'+layout.join(',')+'|'+user().id+'|'+(user().localVersion||1);
+  const ws=workspace(),layout=wh().layout,cat=sharedCatalog(),wsFp=scopeKey()+'|'+JSON.stringify(ws.fiveRows)+'|'+layout.join(',')+'|'+user().id+'|'+(user().localVersion||1)+'|'+registryCacheId();
   if(_normMemo&&_normMemo.cat===cat&&_normMemo.wsFp===wsFp)return _normMemo.rows;
   const wsRows=ws.fiveRows.map((r,i)=>mapRawFiveRow(r,i,layout)).filter(o=>(o.contentCode||o.mixCode||o.mediaCode));
   if(!cat?.rows?.length){_normMemo={cat,wsFp,rows:wsRows};return wsRows;}
   const cd=getCachedCatData(cat,layout),catRows=cd.rows,wsKeys=new Set();
-  for(const r of wsRows){
+  // A Media-only placeholder is not a resolved MIX and must not hide Catalog ambiguity.
+  const localRows=wsRows.filter(row=>!( !row.caption&&row.mediaCode&&row.mixCode===row.mediaCode&&cd.byCode.has(row.mediaCode) ));
+  for(const r of localRows){
     if(r.mixCode)wsKeys.add('M:'+r.mixCode);
-    if(r.mediaCode)wsKeys.add('V:'+r.mediaCode);
   }
-  const merged=[...wsRows];
+  const merged=[...localRows];
   for(const cr of catRows){
-    if((cr.mixCode&&wsKeys.has('M:'+cr.mixCode))||(cr.mediaCode&&wsKeys.has('V:'+cr.mediaCode)))continue;
+    if(cr.mixCode&&wsKeys.has('M:'+cr.mixCode))continue;
     merged.push(cr);
   }
   _normMemo={cat,wsFp,rows:merged};
@@ -9271,7 +9288,7 @@ function workerCall(cmd,payload,transfer=[]){if(typeof Worker==='undefined'){if(
 function cancelImport(){importCancel++;if(worker){worker.terminate();worker=null;}for(const r of workerRequests.values())r.reject(Error('Đã hủy import'));workerRequests.clear();notice('Đã hủy import đang chạy; dữ liệu đã nhập được giữ.','warn');}
 async function readMatrices(file){C.assertFileSize(file,file.name.endsWith('.json')?C.PRODUCTION_LIMITS.maxBackupFileBytes:C.PRODUCTION_LIMITS.maxUploadFileBytes);if(/\.xls$/i.test(file.name))throw Error('Định dạng XLS cũ chưa hỗ trợ; lưu lại thành XLSX/CSV.');const buffer=await file.arrayBuffer();try{return await workerCall('parse',{name:file.name,buffer},[buffer]);}catch(e){if(/hủy/.test(e.message))throw e;notice('Worker bị chặn; đang đọc file trên trình duyệt.','warn');const b=await file.arrayBuffer();if(/\.xlsx$/i.test(file.name)){const wb=new ExcelJS.Workbook();await wb.xlsx.load(b);return wb.worksheets.map(ws=>matrixFromSheet(ws));}return[{name:file.name,matrix:C.parseAdsTemplateCsv(new Uint8Array(b)).rows,formulaCells:[]}];}}
 function matrixFromSheet(ws){const matrix=[],formulaCells=[];for(let i=1;i<=ws.rowCount;i++){const row=[];for(let j=1;j<=Math.min(ws.columnCount,512);j++){const c=ws.getRow(i).getCell(j),v=c.value;row.push(String(v?.result??(v?.richText?v.richText.map(x=>x.text).join(''):v?.text??(typeof v==='object'?'':v))??''));if(i<=50&&v&&typeof v==='object'&&v.formula)formulaCells.push({row:i,column:j,formula:'='+v.formula,numberFormat:c.numFmt});}matrix.push(row);}C.assertImportedRowCount(matrix.length,ws.name);return{name:ws.name,matrix,formulaCells};}
-async function selectFiles(kind,files){const token=capture(),generation=importCancel;C.assertFileBatch([...files]);for(const file of files){if(generation!==importCancel)break;if(kind==='backup'||['config','registry','template-json','report-session','report-profiles','legacy'].includes(kind)){const data=JSON.parse(await file.text());guard(token);await importJSON(kind,data);continue;}if(kind==='report'&&(report().sources.some(s=>s.name.toLowerCase()===file.name.toLowerCase())||pendingImports.some(s=>s.kind==='report'&&s.scope===key(user().id,db.session.channel)&&s.name.toLowerCase()===file.name.toLowerCase()))){notice('Bỏ qua file trùng tên: '+file.name,'warn');continue;}notice('Đang đọc '+file.name+'…');const sheets=await readMatrices(file);guard(token);if(generation!==importCancel)break;const p={id:id(),kind,name:file.name,sheets,sheet:0,header:1,scope:kind==='report'?key(user().id,db.session.channel):scopeKey(),token};pendingImports.push(p);}if(pendingImports.length)openImport(pendingImports.find(p=>p.token===token)||pendingImports[0]);render();}
+async function selectFiles(kind,files){const token=capture(),generation=importCancel,batch=[...files];if(kind==='backup'){if(batch.length>1)throw Error('Mỗi lần chỉ khôi phục một file backup.');for(const file of batch)C.assertFileSize(file,C.PRODUCTION_LIMITS.maxBackupFileBytes,'File backup');}else C.assertFileBatch(batch);for(const file of batch){if(generation!==importCancel)break;if(kind==='backup'||['config','registry','template-json','report-session','report-profiles','legacy'].includes(kind)){const data=JSON.parse(await file.text());guard(token);await importJSON(kind,data);continue;}if(kind==='report'&&(report().sources.some(s=>s.name.toLowerCase()===file.name.toLowerCase())||pendingImports.some(s=>s.kind==='report'&&s.scope===key(user().id,db.session.channel)&&s.name.toLowerCase()===file.name.toLowerCase()))){notice('Bỏ qua file trùng tên: '+file.name,'warn');continue;}notice('Đang đọc '+file.name+'…');const sheets=await readMatrices(file);guard(token);if(generation!==importCancel)break;const p={id:id(),kind,name:file.name,sheets,sheet:0,header:1,scope:kind==='report'?key(user().id,db.session.channel):scopeKey(),token};pendingImports.push(p);}if(pendingImports.length)openImport(pendingImports.find(p=>p.token===token)||pendingImports[0]);render();}
 function openImport(p){if(p.token!==capture())throw Error('Hãy quay lại đúng hồ sơ, Kho và kênh để nhập file đang chờ.');modalState={type:'import',id:p.id};const sheet=p.sheets[p.sheet],mat=sheet.matrix;if(p.kind==='source'&&!p.autoDetected){const auto=autoDetectCompanySheet(mat,wh().layout,sheetSyncConfig().colRules);p.header=auto.headerRow;p.sourceMapping=auto.mapping;p.allSheets=p.sheets.length>1;p.saveToCatalog=true;p.autoDetected=true;}const header=Math.max(1,Number(p.header)||1),headers=mat[header-1]||[];let mapHTML='';if(p.kind==='report'){p.mapping??=C.suggestMetaMapping(headers,db.session.channel==='CD'?'cd':'mess').mapping;mapHTML=`<div class="form-grid">${[['code','Tên quảng cáo/chiến dịch'],['spend','Chi tiêu'],['result','Kết quả']].map(([k,label])=>`<label>${label}<select data-import-map="${k}">${[['-1','Chọn cột'],...headers.map((h,i)=>[String(i),h||'Cột '+(i+1)])].map(([i,h])=>`<option value="${i}" ${Number(i)===p.mapping[k]?'selected':''}>${esc(h)}</option>`).join('')}</select></label>`).join('')}</div>`;}if(p.kind==='source'){const curHeader=Math.max(1,Number(p.header)||1),curHeaders=(mat[curHeader-1]||[]).map(h=>{const lines=String(h??'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);return lines.length>1&&new Set(lines).size===1?lines[0]:String(h??'').trim();});const fieldLabels={contentCode:'Mã Content',caption:'Caption / Mô tả QC',mediaCode:'Mã Media',mixCode:'Mã Mix',pageRaw:'Page / Loại Page'};mapHTML=`<div class="form-grid">${wh().layout.map((k,j)=>`<label>${fieldLabels[k]||k}<select data-source-map="${j}">${[['-1','— Bỏ qua / Tự tính —'],...curHeaders.map((h,i)=>[String(i),h||'Cột '+(i+1)])].map(([i,h])=>`<option value="${i}" ${Number(i)===p.sourceMapping[j]?'selected':''}>${esc(h)}</option>`).join('')}</select></label>`).join('')}</div><div class="actions" style="margin:8px 0"><label class="check-pill"><input type="checkbox" id="import-all-sheets" ${p.allSheets?'checked':''}> Quét tất cả ${p.sheets.length} sheet có cột Content</label><label class="check-pill"><input type="checkbox" id="import-save-catalog" ${p.saveToCatalog!==false?'checked':''}> Lưu vào Bộ nguồn Kho (tự động map mọi phiên)</label></div>`;}openModal('Nhập '+p.name,`<p>${esc(p.kind)} · ${mat.length} dòng · chỉ ghi sau khi xác nhận</p><div class="form-grid"><label>Sheet<select id="import-sheet">${p.sheets.map((s,i)=>`<option value="${i}" ${i===p.sheet?'selected':''}>${esc(s.name)}</option>`).join('')}</select></label><label>Dòng Header<input id="import-header" type="number" min="1" value="${header}"></label></div>${mapHTML}<div class="table-wrap">${grid(headers.slice(0,12),mat.slice(header,header+5).map(line=>Object.fromEntries(headers.slice(0,12).map((h,i)=>[h,line[i]??'']))))}</div>`,btn('confirm-import','Xác nhận nhập',{id:p.id},'primary')+btn('discard-import','Bỏ file',{id:p.id}));}
 async function confirmImport(p){guard(p.token);const sheet=p.sheets[p.sheet],h=sheet.matrix[p.header-1]||[],data=sheet.matrix.slice(p.header),mode=db.session.channel==='CD'?'cd':'mess';C.assertImportedRowCount(data.length,p.name);if(p.kind==='report'){const e=C.validateMetaMapping(h,p.mapping);if(e)throw Error(e);const result=await workerCall('aggregate',{name:p.name,rows:data.map((cells,i)=>({cells,rowNumber:p.header+i+1})),mapping:p.mapping,mode,codeRules:user().reportRules});guard(p.token);if(p.replaceSourceName)report().sources=report().sources.filter(s=>s.name!==p.replaceSourceName);report().sources.push(C.applySuperReportCodeFilterToSource(result,mode,user().reportRules||C.DEFAULT_SUPER_REPORT_CODE_FILTER));report().ack=[];}else if(p.kind==='source'){const allChk=$('#import-all-sheets'),catChk=$('#import-save-catalog');
 if(Array.isArray(p.sourceMapping)){
@@ -9472,7 +9489,7 @@ case 'backup-report':download('SieuAds_Phiên_'+db.session.channel+'.json',JSON.
 case 'checkpoint':checkpoint('Điểm phục hồi thủ công');notice('Đã lưu điểm phục hồi trên máy','success');break;
 case 'restore-checkpoint':{const p=db.checkpoints.find(x=>x.id===a.id&&x.user===u.id);if(!p)throw Error('Không có điểm phục hồi');checkpoint('Trước phục hồi');sheetScopeEpoch++;SieuGoogle.abort();db.session.warehouse=p.warehouse;wh().archived=false;db.session.channel=p.channel;db.scopes[scopeKey()]=restoreScopedRows(p);db.reports[key(u.id,p.channel)]=clone(p.report);report().ack=[];break;}
 case 'delete-checkpoint':db.checkpoints=db.checkpoints.filter(x=>x.id!==a.id||x.user!==u.id);break;
-case 'backup-all':await persistNow();download('SieuAds_Backup_'+dateParts().iso+'.json',JSON.stringify(namedBackup('SIEUADS_OFFLINE_BACKUP',{data:db}),null,2));return;
+case 'backup-all':{await persistNow();const payload=JSON.stringify(namedBackup('SIEUADS_OFFLINE_BACKUP',{data:db}),null,2),limit=C.PRODUCTION_LIMITS.maxBackupFileBytes;if(new Blob([payload]).size>limit)throw Error('Backup toàn bộ vượt giới hạn 50 MB. Chưa tạo file vì ứng dụng không thể khôi phục file vượt giới hạn này.');download('SieuAds_Backup_'+dateParts().iso+'.json',payload);return;}
 case 'confirm-restore-backup':{if(modalState?.type!=='restoreBackup')throw Error('Backup hết hiệu lực');const incoming=clone(modalState.data);validateBackup(incoming);download('SieuAds_Truoc_Khoi_Phuc_'+Date.now()+'.json',JSON.stringify(namedBackup('SIEUADS_OFFLINE_BACKUP',{data:db})));sheetScopeEpoch++;SieuGoogle.abort();db=incoming;db.revision=storeRev;repairLegacySourceScopes();closeModal();break;}
 case 'confirm-config-import':{if(modalState?.type!=='importConfig')throw Error('File hết hiệu lực');const x=clone(modalState.user);if(a.newUser){const code=x.id||x.config.nameCode;if(db.users.some(u=>u.id===code))throw Error('Mã hồ sơ đã tồn tại; chọn nhập vào hồ sơ hiện tại hoặc đổi mã trong file');db.users.push(seedUser(x));db.session.user=code;}else{u.draft=clone(x.config);if(x.templates)u.templateImport=clone(x.templates);openModal('Đã nhận cấu hình vào nháp',msg('Cấu hình chung chưa kích hoạt. Có thể nhập kèm template/Registry đúng hồ sơ từ file backup.'),btn('apply-imported-extras','Nhận kèm Master, template và Registry vào nháp'));modalState={type:'configExtras',user:x};save();render();return;}closeModal();break;}
 case 'apply-imported-extras':if(modalState?.type==='configExtras'){const x=modalState.user;u.masterDraft=clone(x.master||u.master);for(const [k,t]of Object.entries(x.templates||{}))u.templateDrafts[k]=clone(t.payload);for(const[k,v]of Object.entries(x.registries||{}))u.registryDrafts[k]=clone(v);}closeModal();break;
@@ -9644,8 +9661,7 @@ function fillDailyRowsFromCatalog(catRows,catLayout,populateTable=true){
   for(const p of parsed){
     const code=cleanCodeToken(dailyCodeLookupKey(p.rawContent));
     if(!code)continue;
-    const hits=cd.byCode.get(code)||[];
-    const hit=hits.find(c=>!c.mediaCode&&c.contentCode===code)||hits[0];
+    const hit=uniqueCatalogHit(cd,code);
     if(!hit)continue;
     matchedCount++;
     if(populateTable){
@@ -9941,8 +9957,7 @@ function syncFiveSkeletonsFromDaily(){
     const existsIdx=rows.findIndex(r=>[getVal(r,'contentCode'),getVal(r,'mediaCode'),getVal(r,'mixCode')].includes(code));
     if(existsIdx>=0){
       if(cd&&isSkeletonFiveRow(rows[existsIdx],layout)){
-        const hits=cd.byCode.get(code)||[];
-        const hit=hits.find(c=>!c.mediaCode&&c.contentCode===code)||hits[0];
+        const hit=uniqueCatalogHit(cd,code);
         if(hit){
           rows[existsIdx]=layout.map(k=>({contentCode:hit.contentCode,caption:hit.caption,mediaCode:hit.mediaCode,mixCode:hit.mixCode,pageRaw:hit.pageRaw}[k]||''));
           added++;
@@ -9951,8 +9966,7 @@ function syncFiveSkeletonsFromDaily(){
       continue;
     }
     if(cd){
-      const hits=cd.byCode.get(code)||[];
-      const hit=hits.find(c=>!c.mediaCode&&c.contentCode===code)||hits[0];
+      const hit=uniqueCatalogHit(cd,code);
       if(hit){
         rows.push(layout.map(k=>({contentCode:hit.contentCode,caption:hit.caption,mediaCode:hit.mediaCode,mixCode:hit.mediaCode?hit.mixCode:(hit.mixCode||hit.contentCode),pageRaw:hit.pageRaw}[k]||'')));
         added++;
@@ -9982,13 +9996,17 @@ function smartMatchAndFillFiveRows(matrix,fallbackRowIdx,fallbackColIdx){
     // If pasting a full 5-column row (or >=3 columns starting at col 0), try matching against an existing skeleton/row by code
     let targetIdx=-1;
     if(fallbackColIdx===0&&incoming.length>=3){
-      const incObj={};layout.forEach((k,j)=>incObj[k]=canon(incoming[j]??''));
-      const candidates=[incObj.mediaCode,incObj.contentCode,incObj.mixCode].filter(Boolean);
-      if(candidates.length){
-        // 1. Prefer matching an existing skeleton row (no caption yet) with the same code
-        targetIdx=rows.findIndex(r=>isSkeletonFiveRow(r,layout)&&candidates.some(c=>[getVal(r,'mediaCode'),getVal(r,'contentCode'),getVal(r,'mixCode')].includes(c)));
-        // 2. Or match any existing row with the same code to update it in-place
-        if(targetIdx<0)targetIdx=rows.findIndex(r=>candidates.some(c=>c&&[getVal(r,'mediaCode'),getVal(r,'contentCode'),getVal(r,'mixCode')].includes(c)));
+      const incomingMix=fiveRowMixIdentity(incoming,layout);
+      if(incomingMix)targetIdx=rows.findIndex(row=>fiveRowMixIdentity(row,layout)===incomingMix);
+      if(targetIdx<0){
+        const contentIdx=layout.indexOf('contentCode'),mediaIdx=layout.indexOf('mediaCode');
+        const content=contentIdx<0?'':cleanCodeToken(incoming[contentIdx]);
+        const media=mediaIdx<0?'':cleanCodeToken(incoming[mediaIdx]);
+        targetIdx=rows.findIndex(row=>{
+          if(!isSkeletonFiveRow(row,layout))return false;
+          const c=getVal(row,'contentCode'),m=getVal(row,'mediaCode'),x=getVal(row,'mixCode');
+          return (!c&&m===media&&media&&(!x||x===m))||(!m&&c===content&&content&&(!x||x===c));
+        });
       }
     }
     if(targetIdx<0){
