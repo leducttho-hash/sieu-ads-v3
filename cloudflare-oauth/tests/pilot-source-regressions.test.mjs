@@ -19,7 +19,7 @@ function fixture(){
   const layout=['contentCode','caption','mediaCode','mixCode','pageRaw'];
   const work={fiveRows:[],dailyPaste:'',overrides:{}};
   const catalog={layout,rows:[]};
-  const who={id:'ThoLD',localVersion:1,config:{}};
+  const who={id:'ThoLD',localVersion:1,config:{campaignNameConfig:{},messOverrides:{}}};
   const downloads=[],imports=[];
   const ctx=vm.createContext({structuredClone,Blob,TextEncoder,TextDecoder,
     user:()=>who,wh:()=>({id:'thcs',layout}),registry:()=>reg,
@@ -27,14 +27,16 @@ function fixture(){
     canon:value=>String(value??'').normalize('NFKC').trim().toUpperCase(),
     conveyorItems:()=>[],ui:{},db:{session:{channel:'CD'},sourceScopeRepairs:{},marker:'preserve'},
     key:(...parts)=>parts.join('|'),
+    parsePosts:()=>[],manualPage:()=>null,subjectKey:value=>value,
+    dailyRouting:()=>({resolution:{status:'NONE'},subject:'',title:'',errors:[]}),
     capture:()=> 'scope',importCancel:0,pendingImports:[],guard:()=>{},
     importJSON:async(kind,data)=>imports.push({kind,data}),render:()=>{},notice:()=>{},
     persistNow:async()=>{},download:(name,value)=>downloads.push({name,value}),
     dateParts:()=>({iso:'2026-11-18'}),report:()=>({}),SEED:{sourceCommit:'fixture'},
   });
   vm.runInContext(core+';var C=SieuCore.default;',ctx);
-  vm.runInContext('const _catRowCache=new WeakMap(),_regTokenCache=new WeakMap(),_registryCacheIds=new WeakMap();let _normMemo=null,_registryCacheSerial=0;',ctx);
-  for(const name of ['cleanCodeToken','getRegTokens','mapRawFiveRow','registryCacheId','uniqueCatalogHit','fiveRowMixIdentity','getCachedCatData','normalizedFive','isSkeletonFiveRow','dailyCodeLookupKey','syncFiveSkeletonsFromDaily','fillDailyRowsFromCatalog','smartMatchAndFillFiveRows','selectFiles','namedBackup','performCore'])vm.runInContext(functionSource(name),ctx);
+  vm.runInContext('const _catRowCache=new WeakMap(),_regTokenCache=new WeakMap(),_registryCacheIds=new WeakMap(),_normEngineCache=new WeakMap();let _normMemo=null,_registryCacheSerial=0;',ctx);
+  for(const name of ['cleanCodeToken','getRegTokens','mapRawFiveRow','registryCacheId','uniqueCatalogHit','fiveRowMixIdentity','getCachedCatData','normalizedFive','sourceIssues','buildCleanContentIndex','getNormEngines','compute','isSkeletonFiveRow','dailyCodeLookupKey','syncFiveSkeletonsFromDaily','fillDailyRowsFromCatalog','smartMatchAndFillFiveRows','selectFiles','namedBackup','performCore'])vm.runInContext(functionSource(name),ctx);
   return {ctx,layout,work,catalog,downloads,imports,setRegistry(value){reg=value;}};
 }
 const rows=()=>[
@@ -64,6 +66,13 @@ test('pasting distinct MIX rows sharing Media preserves both; repeating a MIX up
   assert.equal(work.fiveRows.length,2);assert.equal(work.fiveRows[0][1],'Updated first');assert.equal(work.fiveRows[1][1],'Second caption');
   work.fiveRows=[['','','LUV457TA','','']];ctx.smartMatchAndFillFiveRows(rows(),0,0);
   assert.equal(work.fiveRows.length,2);
+});
+
+test('MESS Daily rejects ambiguous Media and resolves explicitly supplied MIX rows',()=>{
+  const {ctx,work}=fixture();ctx.db.session.channel='MESS';work.fiveRows=rows();work.dailyPaste='LUV457TA';
+  const ambiguous=ctx.compute()[0];assert.equal(ambiguous.status,'ERROR');assert(ambiguous.errors.some(error=>error.includes('MEDIA TRÙNG NHIỀU MIX')));
+  work.dailyPaste='LUC883LUV457TA\nLUC884LUV457TA';
+  const explicit=ctx.compute();assert(explicit.every(row=>row.status==='READY'));assert.deepEqual(Array.from(explicit,row=>row.caption),['First caption','Second caption']);
 });
 
 test('saved Registry replacement invalidates local and Catalog source classification',()=>{
