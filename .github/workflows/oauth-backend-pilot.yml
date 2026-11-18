@@ -1,0 +1,20 @@
+name: OAuth backend pilot checks
+on:
+  push:
+    branches: [feature/oauth-backend-pilot]
+    paths: ['cloudflare-oauth/**', 'index.html', '.github/workflows/oauth-backend-pilot.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --check cloudflare-oauth/worker.mjs
+      - run: node --check cloudflare-oauth/backend-client.js
+      - run: node --test cloudflare-oauth/tests/*.test.mjs
+      - run: node cloudflare-oauth/prepare.mjs

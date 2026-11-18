@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import {readFileSync} from 'node:fs';
+const script=readFileSync(new URL('../backend-client.js',import.meta.url),'utf8'),origin='https://pilot.example';
+const live=new Map([['ThoLD',{connected:true,profile:'ThoLD',email:'tho@example.invalid',excel:true,until:Date.now()+86400000,csrf:'fixture-csrf-tho'}],['Mynnh',{connected:true,profile:'Mynnh',email:'my@example.invalid',excel:false,until:Date.now()+86400000,csrf:'fixture-csrf-my'}]]);
+function create(){const w=new EventTarget(),calls=[],popups=[];let handler=null;
+ w.open=url=>{const popup={url,closed:false,close(){this.closed=true}};popups.push(popup);return popup;};
+ const sandbox={window:w,location:{origin},Map,Set,Promise,DOMException,AbortController,TextDecoder,Uint8Array,Date,Error,TypeError,setTimeout,clearTimeout,setInterval,clearInterval,fetch:async(url,options)=>{calls.push({url,options});assert.equal(options.credentials,'same-origin');assert.equal(options.redirect,'error');if(handler){const result=await handler(url,options);if(result)return result;}const u=new URL(url,origin),profile=u.searchParams.get('profile');if(u.pathname==='/auth/config')return Response.json({enabled:true,clientId:'fixture.apps.googleusercontent.com',profiles:['ThoLD','Mynnh','Huyenbtt']});if(u.pathname==='/auth/session')return live.has(profile)?Response.json(live.get(profile)):Response.json({message:'connect'},{status:401});if(u.pathname==='/auth/read')return Response.json({values:[['CODE','Body']]});if(u.pathname==='/auth/disconnect'){live.delete(profile);return Response.json({ok:true});}throw Error('Unexpected URL');}};
+ vm.createContext(sandbox);vm.runInContext(script,sandbox);return{w,g:w.SieuGoogleBackend,calls,popups,handle(fn){handler=fn},message(popup,data,eventOrigin=origin){const e=new Event('message');Object.defineProperties(e,{origin:{value:eventOrigin},source:{value:popup},data:{value:data}});w.dispatchEvent(e)}};
+}
+const t=create();await t.g.ready;assert(t.g.status('ThoLD').excel);assert.equal(t.g.status('Mynnh').email,'my@example.invalid');assert.equal(t.g.status('Huyenbtt'),null);
+await t.g.ensure({profile:'ThoLD',excel:true});assert.equal(t.popups.length,0);assert(!JSON.stringify(t.g.status('ThoLD')).includes('csrf'));
+await t.g.request('https://sheets.googleapis.com/v4/spreadsheets/fixture',{profile:'ThoLD'});const read=t.calls.find(x=>x.url.startsWith('/auth/read'));assert.equal(read.options.headers['X-CSRF-Token'],'fixture-csrf-tho');assert(!read.options.headers.Authorization);
+t.g.abort();assert(t.g.status('ThoLD'));assert(t.g.status('Mynnh'));const reload=create();await reload.g.ready;assert(reload.g.status('ThoLD'));assert(reload.g.status('Mynnh'));assert.equal(reload.popups.length,0);
+console.log('PASS reload and profile switch retain server session; read uses same-origin cookie and CSRF, never a Google token');
+const popupPromise=t.g.connect({profile:'Huyenbtt',excel:true}),popup=t.popups.at(-1);let settled=false;popupPromise.then(()=>settled=true,()=>settled=true);
+t.message(popup,{type:'sieuads-oauth-result',profile:'Huyenbtt',ok:true},'https://attacker.example');await new Promise(r=>setTimeout(r,0));assert(!settled);
+t.message({}, {type:'sieuads-oauth-result',profile:'Huyenbtt',ok:true});await new Promise(r=>setTimeout(r,0));assert(!settled);
+live.set('Huyenbtt',{connected:true,profile:'Huyenbtt',email:'hu@example.invalid',excel:true,until:Date.now()+86400000,csrf:'fixture-csrf-hu'});
+t.message(popup,{type:'sieuads-oauth-result',profile:'Huyenbtt',ok:true});assert.equal((await popupPromise).email,'hu@example.invalid');assert(popup.closed);
+console.log('PASS popup accepts only the matching window, origin and profile; server session must validate success');
+const abortedPopup=t.g.connect({profile:'ThoLD'});t.g.abort();await assert.rejects(abortedPopup,/hủy/);assert(t.popups.at(-1).closed);
+// A user switch while session recovery is pending must not open a popup for the old profile.
+t.g.forget();let release;t.handle(async url=>url.startsWith('/auth/session')?new Promise(r=>release=()=>r(Response.json({message:'connect'},{status:401}))):null);
+const recovering=t.g.ensure({profile:'ThoLD'});await new Promise(r=>setTimeout(r,0));const opened=t.popups.length;t.g.abort();release();await assert.rejects(recovering,/hủy/);assert.equal(t.popups.length,opened);
+console.log('PASS scope abort closes pending auth and prevents late recovery from opening an old-profile popup');
+const streamTest=create();await streamTest.g.ready;streamTest.handle(async(url,options)=>{if(!url.startsWith('/auth/read'))return null;return new Response(new ReadableStream({start(controller){controller.enqueue(new TextEncoder().encode('{"partial":'));options.signal.addEventListener('abort',()=>controller.error(new DOMException('cancelled','AbortError')),{once:true});}}));});
+const reading=streamTest.g.request('https://sheets.googleapis.com/v4/spreadsheets/fixture',{profile:'ThoLD'});await new Promise(r=>setTimeout(r,0));streamTest.g.abort();await assert.rejects(reading,/cancelled/);
+console.log('PASS switching scope aborts an in-flight response body; no background polling remains after auth');
+assert(!script.includes('localStorage'));assert(!script.includes('sessionStorage'));assert(!script.includes('refresh_token'));
+console.log('ALL CLIENT TESTS PASS (mock backend; no real Google connection)');

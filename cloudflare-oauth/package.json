@@ -1,0 +1,7 @@
+{
+  "name": "sieuads-oauth-pilot",
+  "private": true,
+  "type": "module",
+  "scripts": {"build":"node prepare.mjs","test":"node --test tests/*.test.mjs"},
+  "engines": {"node": ">=24"}
+}
