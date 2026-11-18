@@ -2925,7 +2925,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return stableUniqueCandidates(document.pages.flatMap((page) => page.isActive ? types.filter((type) => type.isActive && registryPageHasType(page, type.typeId)).map((type) => candidate(document, page, "PAGE_TYPE_SINGLE", type.typeId)) : []));
   }
   function resolvePageTypeEvidence(document, raw) {
-    const tokens = splitPageTypeLabels(raw);
+    const tokens = matchingPageTypes(document, raw).length ? [String(raw)] : splitPageTypeLabels(raw);
     const uniqueTypes = /* @__PURE__ */ new Map();
     const unknownTokens = [];
     const ambiguousTokens = [];
@@ -9120,9 +9120,20 @@ function pullSelectedDailyCdLinks(r){
 }
 
 function parsePosts(text){return C.parseSuperReportLinkPaste(text,'Link Daily').rows.map(r=>({sourceLine:r.row,adName:r.rawName,permalink:r.permalink}));}
-function manualPage(o,reg){const page=reg.pages.find(p=>p.pageId===o.pageId&&p.isActive);if(!page)return null;const tids=C.registryPageTypeIds(page).filter(id=>reg.pageTypes.some(type=>type.typeId===id&&type.isActive));const type=reg.pageTypes.find(t=>t.typeId===o.pageTypeId&&t.isActive&&tids.includes(t.typeId))|| (tids.length===1?reg.pageTypes.find(t=>t.typeId===tids[0]&&t.isActive):null);return type?{pageId:page.pageId,pageName:page.name,pageTypeId:type.typeId,pageTypeCode:type.code,pageTypeName:type.name,source:'MANUAL'}:null;}
+function manualPage(o,reg,companyPage){
+  const page=reg.pages.find(page=>page.pageId===o.pageId&&page.isActive);
+  if(!page)return null;
+  const typeIds=C.registryPageTypeIds(page).filter(id=>reg.pageTypes.some(type=>type.typeId===id&&type.isActive));
+  let type=reg.pageTypes.find(type=>type.typeId===o.pageTypeId&&type.isActive&&typeIds.includes(type.typeId));
+  if(!type&&o.pageTypeId===undefined&&companyPage?.pageType){
+    const resolution=C.resolveRegistryPage(reg,{pageId:page.pageId,pageType:companyPage.pageType});
+    if(resolution.selection)type=reg.pageTypes.find(type=>type.typeId===resolution.selection.pageTypeId);
+  }
+  if(!type&&typeIds.length===1)type=reg.pageTypes.find(type=>type.typeId===typeIds[0]);
+  return type?{pageId:page.pageId,pageName:page.name,pageTypeId:type.typeId,pageTypeCode:type.code,pageTypeName:type.name,source:'MANUAL'}:null;
+}
 function compute(){const ws=workspace(),cfg=user().config,rows=normalizedFive(),reg=registry(),channel=db.session.channel,year=new Date().getFullYear(),eng=getNormEngines(rows),sourceErrors=eng.sourceErrors,index=eng.index,mindex=eng.mindex,posts=parsePosts(ws.posts),parsed=C.parseDailyBulkPaste(ws.dailyPaste,year),out=[];
-for(const [i,p]of parsed.entries()){const rid=key(i,p.rawContent),o=ws.overrides[rid]||{},raw=C.stripMappedContentAnnotations(p.rawContent,cfg.campaignNameConfig?.contentSuffixRules),lookup=cleanCodeToken(C.adsContentLookupIdentity(C.extractDailyContentCode(raw))),candidates=eng.byCode.get(lookup)||[],matched=candidates.find(c=>!c.mediaCode&&c.contentCode===lookup)||candidates[0],resolution=C.resolveContentRule({rawContent:p.rawContent,rules:scopedContentRules(cfg,channel),titles:cfg.titlePresets||[],master:user().master||C.DEFAULT_OPS_MASTER_DATA}),subject=o.subject??(resolution.status==='RESOLVED'&&resolution.subject?C.resolveDailySubjectCompatibility('',resolution.subject.id,cfg.subjectLinks,subjects(),{active:true,payload:user().master}):C.resolveDailySubjectCompatibility(p.rawContent,p.subject,cfg.subjectLinks,subjects(),{active:true,payload:user().master})),sel=manualPage(o,reg),hasManualPage=Object.prototype.hasOwnProperty.call(o,'pageId'),manualBody=o.body,day=o.date??p.workDateRaw;let item;
+for(const [i,p]of parsed.entries()){const rid=key(i,p.rawContent),o=ws.overrides[rid]||{},raw=C.stripMappedContentAnnotations(p.rawContent,cfg.campaignNameConfig?.contentSuffixRules),lookup=cleanCodeToken(C.adsContentLookupIdentity(C.extractDailyContentCode(raw))),candidates=eng.byCode.get(lookup)||[],matched=candidates.find(c=>!c.mediaCode&&c.contentCode===lookup)||candidates[0],resolution=C.resolveContentRule({rawContent:p.rawContent,rules:scopedContentRules(cfg,channel),titles:cfg.titlePresets||[],master:user().master||C.DEFAULT_OPS_MASTER_DATA}),subject=o.subject??(resolution.status==='RESOLVED'&&resolution.subject?C.resolveDailySubjectCompatibility('',resolution.subject.id,cfg.subjectLinks,subjects(),{active:true,payload:user().master}):C.resolveDailySubjectCompatibility(p.rawContent,p.subject,cfg.subjectLinks,subjects(),{active:true,payload:user().master})),sel=manualPage(o,reg,matched?.companyPage),hasManualPage=Object.prototype.hasOwnProperty.call(o,'pageId'),manualBody=o.body,day=o.date??p.workDateRaw;let item;
 if(channel==='CD'){
   const extCode=C.extractDailyContentCode(raw);
   const rawForLookup=matched&&(index.mediaToMix.has(lookup)||index.contentToMix.has(lookup))?`${lookup}${raw.includes('(')?' '+raw.slice(raw.indexOf('(')):''}`:raw;
