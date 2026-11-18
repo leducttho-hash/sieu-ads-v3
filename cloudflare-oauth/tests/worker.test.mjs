@@ -36,6 +36,18 @@ async function login(profile,who){const f=await begin(profile);const res=await d
 async function getSession(profile,jar){const res=await dispatch('/auth/session?profile='+profile,{jar});assert.equal(res.status,200);return res.json();}
 async function read(profile,jar,csrf,url='https://sheets.googleapis.com/v4/spreadsheets/fixture/values/A1%3AE20?valueRenderOption=FORMATTED_VALUE',extra={}){return dispatch('/auth/read?profile='+profile,{jar,method:'POST',body:{url},extra:{Origin:ORIGIN,'X-CSRF-Token':csrf,...extra}});}
 const noConfig=await worker.fetch(new Request(ORIGIN+'/auth/config'),{...env,GOOGLE_CLIENT_SECRET:''});assert.equal(noConfig.status,503);assert(!(await noConfig.text()).includes('FIXTURE_'));
+const badConfigCases=[
+ ['APP_ORIGIN',''],['APP_ORIGIN',ORIGIN+'/'],
+ ['ALLOWED_USERS',''],['ALLOWED_USERS','{BROKEN_FIXTURE'],['ALLOWED_USERS','[]'],['ALLOWED_USERS','{}'],['ALLOWED_USERS',JSON.stringify({ThoLD:'FIXTURE_PRIVATE_EMAIL'})],
+ ['GOOGLE_CLIENT_ID','FIXTURE_PRIVATE_CLIENT_ID'],['GOOGLE_CLIENT_SECRET',''],
+ ['TOKEN_ENCRYPTION_KEY',''],['TOKEN_ENCRYPTION_KEY','%%%FIXTURE_PRIVATE_KEY'],['TOKEN_ENCRYPTION_KEY',Buffer.alloc(31).toString('base64url')],['AUTH_DB',undefined]
+];
+for(const [name,value] of badConfigCases){
+ const response=await worker.fetch(new Request(ORIGIN+'/auth/config'),{...env,[name]:value});
+ assert.equal(response.status,503);const payload=await response.json();assert.equal(payload.error,'NOT_CONFIGURED');assert(payload.message.includes(name),'name the invalid config entry');
+ assert(!JSON.stringify(payload).includes('FIXTURE_')&&!JSON.stringify(payload).includes('example.invalid'),'configuration errors must not disclose secret values or private emails');
+}
+console.log('PASS configuration diagnostics identify missing/invalid entries without exposing values');
 assert.equal((await worker.fetch(new Request(ORIGIN+'/'),env)).status,200);
 assert.equal((await dispatch('/auth/start?profile=unknown')).status,403);
 assert.equal((await dispatch('/auth/start?profile=ThoLD',{extra:{'Sec-Fetch-Site':'cross-site'}})).status,403);

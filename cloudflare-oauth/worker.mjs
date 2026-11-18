@@ -18,11 +18,19 @@ function cookieName(kind,profile){return '__Host-sieuads_'+kind+'_'+profile;}
 function cookie(name,value,maxAge,sameSite='Strict'){return `${name}=${value}; Path=/; Secure; HttpOnly; SameSite=${sameSite}; Max-Age=${maxAge}`;}
 function readCookie(req,name){const match=(req.headers.get('Cookie')||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(name+'='));return match?.slice(name.length+1)||'';}
 function config(env){
- let origin,users;try{origin=new URL(env.APP_ORIGIN);users=JSON.parse(env.ALLOWED_USERS);}catch{fail(503,'NOT_CONFIGURED','Backend thử nghiệm chưa được cấu hình.');}
- if(origin.protocol!=='https:'||origin.origin!==env.APP_ORIGIN||!/^[-\w]+\.apps\.googleusercontent\.com$/.test(env.GOOGLE_CLIENT_ID||'')||!env.GOOGLE_CLIENT_SECRET||!env.TOKEN_ENCRYPTION_KEY||!env.AUTH_DB)fail(503,'NOT_CONFIGURED','Backend thử nghiệm chưa được cấu hình.');
- if(!users||Array.isArray(users)||typeof users!=='object'||!Object.keys(users).length)fail(503,'NOT_CONFIGURED','Chưa cấu hình tài khoản được phép kết nối.');
- for(const [profile,emails] of Object.entries(users))if(!/^[\w-]{1,64}$/.test(profile)||!Array.isArray(emails)||!emails.length||emails.some(x=>typeof x!=='string'||!/^\S+@\S+\.\S+$/.test(x)))fail(503,'NOT_CONFIGURED','Cấu hình hồ sơ Google chưa hợp lệ.');
- const key=unb64(env.TOKEN_ENCRYPTION_KEY);if(key.length!==32)fail(503,'NOT_CONFIGURED','Khóa mã hóa backend chưa hợp lệ.');
+ let origin,users,key;
+ try{origin=new URL(env.APP_ORIGIN);}catch{fail(503,'NOT_CONFIGURED','APP_ORIGIN thiếu hoặc không phải địa chỉ HTTPS hợp lệ. Kiểm tra Runtime variables của Worker.');}
+ if(origin.protocol!=='https:'||origin.origin!==env.APP_ORIGIN)fail(503,'NOT_CONFIGURED','APP_ORIGIN phải là origin HTTPS của bản pilot, không có đường dẫn hoặc dấu / cuối.');
+ if(!env.ALLOWED_USERS)fail(503,'NOT_CONFIGURED','Thiếu secret ALLOWED_USERS trong Runtime Production của Worker.');
+ try{users=JSON.parse(env.ALLOWED_USERS);}catch{fail(503,'NOT_CONFIGURED','ALLOWED_USERS không phải JSON hợp lệ. Dán nguyên đối tượng JSON với dấu ngoặc kép thẳng, không kèm khung mã.');}
+ if(!users||Array.isArray(users)||typeof users!=='object'||!Object.keys(users).length)fail(503,'NOT_CONFIGURED','ALLOWED_USERS phải là đối tượng JSON ánh xạ mã hồ sơ tới danh sách email.');
+ for(const [profile,emails] of Object.entries(users))if(!/^[\w-]{1,64}$/.test(profile)||!Array.isArray(emails)||!emails.length||emails.some(x=>typeof x!=='string'||!/^\S+@\S+\.\S+$/.test(x)))fail(503,'NOT_CONFIGURED','ALLOWED_USERS có mã hồ sơ hoặc danh sách email chưa hợp lệ. Mỗi hồ sơ cần một mảng email không rỗng.');
+ if(!/^[-\w]+\.apps\.googleusercontent\.com$/.test(env.GOOGLE_CLIENT_ID||''))fail(503,'NOT_CONFIGURED','GOOGLE_CLIENT_ID thiếu hoặc sai định dạng. Kiểm tra Client ID đầy đủ trong Runtime Production, không có khoảng trắng.');
+ if(!env.GOOGLE_CLIENT_SECRET)fail(503,'NOT_CONFIGURED','Thiếu secret GOOGLE_CLIENT_SECRET trong Runtime Production của Worker.');
+ if(!env.TOKEN_ENCRYPTION_KEY)fail(503,'NOT_CONFIGURED','Thiếu secret TOKEN_ENCRYPTION_KEY trong Runtime Production của Worker.');
+ try{key=unb64(env.TOKEN_ENCRYPTION_KEY);}catch{fail(503,'NOT_CONFIGURED','TOKEN_ENCRYPTION_KEY không phải khóa base64url hợp lệ. Kiểm tra khóa đã lưu, không tự tạo lại khi đã có kết nối.');}
+ if(key.length!==32)fail(503,'NOT_CONFIGURED','TOKEN_ENCRYPTION_KEY phải giải mã thành đúng 32 byte. Kiểm tra khóa đã lưu.');
+ if(!env.AUTH_DB)fail(503,'NOT_CONFIGURED','Thiếu binding D1 AUTH_DB trong Production của Worker.');
  return {origin:origin.origin,users,key,sessionDays:Math.min(30,Math.max(1,Number(env.SESSION_DAYS)||14))};
 }
 async function seal(cfg,value,aad){const iv=bytes(12),key=await crypto.subtle.importKey('raw',cfg.key,'AES-GCM',false,['encrypt']);const data=await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:encoder.encode(aad)},key,encoder.encode(JSON.stringify(value)));return 'v1.'+b64url(iv)+'.'+b64url(data);}
