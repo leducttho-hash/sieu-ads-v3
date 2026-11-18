@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sieu-ads-v3",
+  "compatibility_date": "2026-11-18",
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "single-page-application"
+  }
+}
