@@ -7,10 +7,14 @@ const database=new DatabaseSync(':memory:');database.exec(readFileSync(new URL('
 const prepare=sql=>({bind(...values){return query(sql,values)},...query(sql,[])});
 function query(sql,values){return{bind(...next){return query(sql,next)},async first(){return database.prepare(sql).get(...values)||null},async run(){return database.prepare(sql).run(...values)},async all(){return{results:database.prepare(sql).all(...values)}}};}
 const env={APP_ORIGIN:ORIGIN,GOOGLE_CLIENT_ID:'fixture.apps.googleusercontent.com',GOOGLE_CLIENT_SECRET:'FIXTURE_CLIENT_SECRET',TOKEN_ENCRYPTION_KEY:Buffer.alloc(32,11).toString('base64url'),ALLOWED_USERS:JSON.stringify({ThoLD:['tho@example.invalid'],Mynnh:['my@example.invalid'],Huyenbtt:['huyen@example.invalid']}),AUTH_DB:{prepare,async batch(items){return Promise.all(items.map(x=>x.run()))}},ASSETS:{fetch:async()=>new Response('Stable app')}};
-const calls=[];let refreshError=false,resourceStatus=200,networkError=false,oversized=false,refreshDelay=0,scopeOverride=null,refreshCounter=0;
+const calls=[];let refreshError=false,resourceStatus=200,networkError=false,oversized=false,refreshDelay=0,scopeOverride=null,refreshCounter=0,redirectEndpoint='';
 const identities={tho:{email:'tho@example.invalid',sub:'sub-tho'},my:{email:'my@example.invalid',sub:'sub-my'},huyen:{email:'huyen@example.invalid',sub:'sub-huyen'},outsider:{email:'outsider@example.invalid',sub:'sub-other'}};
 globalThis.fetch=async(url,options={})=>{
- calls.push({url:String(url),options});assert.equal(options.redirect,'error');if(networkError)throw Error('FIXTURE_NETWORK');
+ calls.push({url:String(url),options});
+ // Workers throws before sending requests with the unsupported redirect:error mode.
+ if(options.redirect==='error')throw new TypeError('Unsupported redirect mode: error');
+ assert.equal(options.redirect,'manual');if(networkError)throw Error('FIXTURE_NETWORK');
+ if(String(url)===redirectEndpoint)return new Response('FIXTURE_PROVIDER_SECRET',{status:302,headers:{Location:'https://untrusted.example/collect?token=FIXTURE_PROVIDER_SECRET'}});
  if(String(url)==='https://oauth2.googleapis.com/token'){
   const body=new URLSearchParams(options.body);assert.equal(body.get('client_secret'),'FIXTURE_CLIENT_SECRET');
   if(body.get('grant_type')==='authorization_code'){const who=body.get('code');assert(body.get('code_verifier'));assert.equal(body.get('redirect_uri'),ORIGIN+'/auth/callback');return Response.json({access_token:'FIXTURE_ACCESS_'+who,refresh_token:'FIXTURE_REFRESH_'+who,expires_in:3600,scope:scopeOverride||'openid email '+S+' '+D});}
@@ -62,7 +66,20 @@ database.prepare('UPDATE google_connections SET version=version+1,expires_at=?,l
 assert.equal((await lateFailure).status,401);refreshError=false;refreshDelay=0;assert.equal((await getSession('ThoLD',first.jar)).connected,true,'newer grant survives an old refresh failure');
 console.log('PASS an old in-flight refresh failure cannot erase a newer connection');
 resourceStatus=403;const n403=refreshCounter;res=await read('ThoLD',first.jar,as.csrf);assert.equal(res.status,403);assert.equal(refreshCounter,n403,'403 does not trigger token refresh or retry');resourceStatus=200;
-networkError=true;res=await read('ThoLD',first.jar,as.csrf);assert.equal(res.status,502);networkError=false;
+networkError=true;res=await read('ThoLD',first.jar,as.csrf);assert.equal(res.status,502);assert.equal((await res.json()).error,'GOOGLE_UNREACHABLE');networkError=false;
+for(const endpoint of ['https://oauth2.googleapis.com/token','https://openidconnect.googleapis.com/v1/userinfo']){
+ redirectEndpoint=endpoint;const flow=await begin('ThoLD'),before=calls.length;
+ res=await dispatch('/auth/callback?state='+flow.state+'&code=tho',{jar:flow.jar});
+ assert.equal(res.status,502);const payload=await res.text();assert.equal(JSON.parse(payload).error,'GOOGLE_REDIRECT');assert(!payload.includes('FIXTURE_')&&!payload.includes('untrusted.example'));
+ assert.equal(calls.slice(before).filter(c=>c.url===endpoint).length,1,'provider redirect is not retried or followed');
+}
+redirectEndpoint='';
+for(const status of [301,302,303,307,308]){
+ resourceStatus=status;const before=calls.length;
+ res=await read('ThoLD',first.jar,as.csrf);assert.equal(res.status,502);assert.equal((await res.json()).error,'GOOGLE_REDIRECT');assert.equal(calls.length,before+1);
+}
+resourceStatus=200;assert.equal((await getSession('ThoLD',first.jar)).connected,true,'redirect failures preserve the existing connection');
+console.log('PASS Workers-compatible fetch; token/userinfo/resource redirects rejected without following, retrying, leaking provider data or losing the session');
 oversized=true;res=await read('ThoLD',first.jar,as.csrf);assert.equal(res.status,413);oversized=false;
 assert.equal((await getSession('Mynnh',my.jar)).connected,true);
 database.prepare('UPDATE google_connections SET expires_at=? WHERE profile=?').run(Date.now()-1,'ThoLD');refreshError=true;res=await read('ThoLD',first.jar,as.csrf);assert.equal(res.status,401);refreshError=false;assert.equal((await dispatch('/auth/session?profile=ThoLD',{jar:first.jar})).status,401);assert.equal((await getSession('Mynnh',my.jar)).connected,true);
@@ -70,3 +87,4 @@ res=await dispatch('/auth/disconnect?profile=Mynnh',{jar:my.jar,method:'POST',bo
 console.log('PASS no refresh on forbidden file; network/oversize errors; revoked grant invalidates only affected account; explicit disconnect leaves other accounts working');
 assert(!calls.some(x=>!/^https:\/\/(accounts.google.com|oauth2.googleapis.com|openidconnect.googleapis.com|sheets.googleapis.com|www.googleapis.com)\//.test(x.url)));
 console.log('ALL BACKEND TESTS PASS (mock Google endpoints; in-memory SQLite; no real credentials or source files accessed)');
+

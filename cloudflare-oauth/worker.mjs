@@ -33,7 +33,13 @@ function sameOrigin(req,cfg,csrf){if(req.headers.get('Origin')!==cfg.origin)fail
 async function rate(db,bucket,limit,ttl){const time=now(),row=await db.prepare('INSERT INTO oauth_rate_limits(bucket,hits,expires_at) VALUES(?,1,?) ON CONFLICT(bucket) DO UPDATE SET hits=CASE WHEN expires_at<? THEN 1 ELSE hits+1 END, expires_at=CASE WHEN expires_at<? THEN excluded.expires_at ELSE expires_at END RETURNING hits').bind(bucket,time+ttl,time,time).first();if(row.hits>limit)fail(429,'RATE_LIMIT','Thao tác quá nhanh. Đợi một chút rồi thử lại.');}
 async function boundedJson(req,limit=12000){const text=await boundedBody(req,limit);try{return JSON.parse(decoder.decode(text));}catch{fail(400,'INVALID_JSON','Dữ liệu yêu cầu chưa hợp lệ.');}}
 async function boundedBody(response,limit){if(Number(response.headers.get('Content-Length'))>limit)fail(413,'TOO_LARGE','Nguồn vượt giới hạn đọc; Catalog cũ được giữ.');const reader=response.body?.getReader();if(!reader)return new Uint8Array();let total=0;const parts=[];try{while(true){const {done,value}=await reader.read();if(done)break;total+=value.length;if(total>limit)fail(413,'TOO_LARGE','Nguồn vượt giới hạn đọc; Catalog cũ được giữ.');parts.push(value);}}catch(e){await reader.cancel().catch(()=>{});throw e;}finally{reader.releaseLock();}const out=new Uint8Array(total);let pos=0;for(const p of parts){out.set(p,pos);pos+=p.length;}return out;}
-async function googleFetch(url,options={}){try{return await fetch(url,{...options,redirect:'error',signal:AbortSignal.timeout(25000)});}catch{fail(502,'GOOGLE_UNREACHABLE','Chưa kết nối được Google. Catalog cũ được giữ; thử lại khi mạng ổn định.');}}
+async function googleFetch(url,options={}){
+ let response;
+ // Workers supports manual/follow only. Never follow Google redirects with credentials.
+ try{response=await fetch(url,{...options,redirect:'manual',signal:AbortSignal.timeout(25000)});}catch{fail(502,'GOOGLE_UNREACHABLE','Chưa kết nối được Google. Catalog cũ được giữ; thử lại khi mạng ổn định.');}
+ if(response.status>=300&&response.status<400){await response.body?.cancel().catch(()=>{});fail(502,'GOOGLE_REDIRECT','Google trả chuyển hướng chưa được hỗ trợ. Catalog cũ được giữ.');}
+ return response;
+}
 async function providerJson(response){try{return JSON.parse(decoder.decode(await boundedBody(response,64000)));}catch(e){if(e instanceof SafeError)throw e;fail(502,'GOOGLE_RESPONSE','Google chưa trả dữ liệu hợp lệ.');}}
 function popup(cfg,profile,ok,message,headers={}){const nonce=b64url(bytes(16)),payload=JSON.stringify({type:'sieuads-oauth-result',profile,ok,message}).replace(/</g,'\\u003c');return new Response(`<!doctype html><html lang="vi"><meta charset="utf-8"><title>Kết nối Siêu Ads</title><body><p id="message"></p><script nonce="${nonce}">const result=${payload};document.getElementById('message').textContent=result.message;if(window.opener){window.opener.postMessage(result,${JSON.stringify(cfg.origin)});if(result.ok)window.close();}</script></body></html>`,{headers:{...common,...headers,'Content-Type':'text/html; charset=utf-8','Content-Security-Policy':`default-src 'none'; script-src 'nonce-${nonce}'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`}});}
 async function start(req,env,cfg,url){
@@ -141,3 +147,4 @@ export default {async fetch(req,env){const url=new URL(req.url);if(!url.pathname
   fail(405,'METHOD_DENIED','Thao tác chưa được hỗ trợ.');
  }catch(error){if(error instanceof SafeError)return json({ok:false,error:error.code,message:error.message},error.status);return json({ok:false,error:'BACKEND_ERROR',message:'Backend chưa xử lý được yêu cầu. Catalog cũ được giữ.'},503);}
 }};
+
