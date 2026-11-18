@@ -8970,7 +8970,7 @@ window.SieuGoogle = (() => {
 (() => {
 const C=SieuCore.default, SEED=JSON.parse(document.getElementById('seed').textContent), $=s=>document.querySelector(s), clone=x=>structuredClone(x), esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])), id=()=>crypto.randomUUID(), key=(...x)=>x.join('|'), canon=x=>String(x??'').normalize('NFKC').trim().toUpperCase(), fmt=x=>Number(x||0).toLocaleString('vi-VN'), fingerprint=x=>JSON.stringify(x), args=x=>encodeURIComponent(JSON.stringify(x)), get=(o,p)=>p.reduce((a,k)=>a?.[k],o), set=(o,p,v)=>{let t=o;for(let i=0;i<p.length-1;i++)t=t[p[i]]??=(typeof p[i+1]==='number'?[]:{});t[p.at(-1)]=v;};
 const WAREHOUSES=[{id:'content-cty',name:'Content CTY · mặc định',channels:['CD','MESS'],layout:['contentCode','caption','mediaCode','mixCode','pageRaw']},{id:'thcs',name:'THCS',channels:['CD'],layout:['contentCode','caption','mediaCode','mixCode','pageRaw']},{id:'tieu-hoc',name:'Tiểu học',channels:['CD'],layout:['contentCode','caption','mediaCode','mixCode','pageRaw']},{id:'gia-su-toan-khtn',name:'GIA SƯ TOÁN - KHTN',channels:['MESS'],layout:['contentCode','mediaCode','caption','pageRaw','mixCode']},{id:'moet',name:'MOET',channels:['MESS'],layout:['contentCode','caption','mediaCode','mixCode','pageRaw']}];
-const DBKEY='sieuads-simple-offline-v3',writer=id();let db,storeRev=0,dirtyTick=0,saveTimer,saveChain=Promise.resolve(),disk,conflict=false,toastTimer,modalState=null,importCancel=0,previewBuild=null,reportCache=null;const ui={view:'daily',config:'identity',simpleConfig:'subjects',studio:'template',query:'',page:1,size:50,formula:false,headers:true,pin:true,menu:false,scaleQuery:'',trace:null,reportQuery:'',showArchived:false};
+const DBKEY='sieuads-simple-offline-v3',writer=id();let db,storeRev=0,dirtyTick=0,saveTimer,saveChain=Promise.resolve(),disk,conflict=false,toastTimer,modalState=null,sheetSyncModalContext=null,sheetScopeEpoch=0,importCancel=0,previewBuild=null,reportCache=null;const ui={view:'daily',config:'identity',simpleConfig:'subjects',studio:'template',query:'',page:1,size:50,formula:false,headers:true,pin:true,menu:false,scaleQuery:'',trace:null,reportQuery:'',showArchived:false};
 const seedUser=s=>({...clone(s),localVersion:1,draft:null,configHistory:[],templateHistory:{},templateDrafts:{},templateTests:{},registryDrafts:{},sources:{},sourceVersions:{},masterDraft:null,reportDraft:null,codeDrafts:{},workflowDrafts:{},defaultKho:{CD:s.id==='ThoLD'?'thcs':'tieu-hoc',MESS:s.id==='ThoLD'?'moet':'gia-su-toan-khtn'}});
 function blankDB(){return{schemaVersion:2,revision:0,users:SEED.users.map(seedUser),warehouses:clone(WAREHOUSES),session:{user:'ThoLD',warehouse:'thcs',channel:'CD'},scopes:{},reports:{},builds:[],preferences:{theme:'light',density:'standard',accent:'#635bff',reduceMotion:false,sound:false,font:14},checkpoints:[],feedback:[]};}
 const user=()=>db.users.find(x=>x.id===db.session.user), wh=()=>db.warehouses.find(x=>x.id===db.session.warehouse), scopeKey=()=>key(db.session.user,db.session.warehouse,db.session.channel);
@@ -9037,11 +9037,12 @@ function getCachedCatData(cat,fallbackLayout){
   map.set(ck,entry);
   return entry;
 }
-function sharedCatalog(wId=wh().id,ch=db.session.channel){const sk=key(wId,ch);db.sharedSources??={};if(db.sharedSources[sk]?.rows?.length)return db.sharedSources[sk];for(const u of db.users||[]){if(u.sources?.[sk]?.rows?.length){db.sharedSources[sk]=u.sources[sk];return db.sharedSources[sk];}}return user()?.sources?.[sk]||null;}
-function saveSharedCatalog(payload,wId=wh().id,ch=wh().channels?.[0]||db.session.channel){const sk=key(wId,ch);db.sharedSources??={};const snap=clone(payload);db.sharedSources[sk]=snap;for(const u of db.users||[]){u.sources??={};u.sourceVersions??={};if(u.id===user()?.id&&u.sources[sk]){u.sourceVersions[sk]??=[];u.sourceVersions[sk].unshift(u.sources[sk]);u.sourceVersions[sk]=u.sourceVersions[sk].slice(0,2);}else{u.sourceVersions[sk]=(u.sourceVersions[sk]||[]).slice(0,1);}u.sources[sk]=snap;}}
+function sharedCatalog(wId=wh().id,ch=db.session.channel){const sk=key(wId,ch);if(db.sourceScopeRepairs?.[sk]?.pending)return null;db.sharedSources??={};if(db.sharedSources[sk]?.rows?.length)return db.sharedSources[sk];for(const u of db.users||[]){if(u.sources?.[sk]?.rows?.length){db.sharedSources[sk]=u.sources[sk];return db.sharedSources[sk];}}return user()?.sources?.[sk]||null;}
+function saveSharedCatalog(payload,wId=wh().id,ch=db.session.channel){const sk=key(wId,ch);if(payload.scope&&(payload.scope.warehouseId!==wId||payload.scope.channel!==ch))throw Error('Nguồn không thuộc Kho và kênh đang lưu.');db.sharedSources??={};const snap=clone(payload);snap.scope={warehouseId:wId,channel:ch};db.sharedSources[sk]=snap;if(db.sourceScopeRepairs?.[sk])db.sourceScopeRepairs[sk].pending=false;for(const u of db.users||[]){u.sources??={};u.sourceVersions??={};if(u.id===user()?.id&&u.sources[sk]){u.sourceVersions[sk]??=[];u.sourceVersions[sk].unshift(u.sources[sk]);u.sourceVersions[sk]=u.sourceVersions[sk].slice(0,2);}else{u.sourceVersions[sk]=(u.sourceVersions[sk]||[]).slice(0,1);}u.sources[sk]=snap;}}
 let _normMemo=null;
 function normalizedFive(){
-  const ws=workspace(),layout=wh().layout,cat=sharedCatalog(),wsFp=JSON.stringify(ws.fiveRows)+'|'+layout.join(',')+'|'+user().id+'|'+(user().localVersion||1);
+  if(db.sourceScopeRepairs?.[key(wh().id,db.session.channel)]?.pending)return [];
+  const ws=workspace(),layout=wh().layout,cat=sharedCatalog(),wsFp=scopeKey()+'|'+JSON.stringify(ws.fiveRows)+'|'+layout.join(',')+'|'+user().id+'|'+(user().localVersion||1);
   if(_normMemo&&_normMemo.cat===cat&&_normMemo.wsFp===wsFp)return _normMemo.rows;
   const wsRows=ws.fiveRows.map((r,i)=>mapRawFiveRow(r,i,layout)).filter(o=>(o.contentCode||o.mixCode||o.mediaCode));
   if(!cat?.rows?.length){_normMemo={cat,wsFp,rows:wsRows};return wsRows;}
@@ -9060,6 +9061,7 @@ function normalizedFive(){
 }
 function sourceIssues(rows){
   const errors=[];
+  if(db.sourceScopeRepairs?.[key(wh().id,db.session.channel)]?.pending)errors.push('Đã cách ly nguồn bị lẫn Kho. Bấm Đồng bộ Kho để lấy lại đúng nguồn trước khi xuất.');
   if(new Set(wh().layout).size!==5)errors.push('Mapping 5 ô phải gồm đủ 5 trường khác nhau.');
   return errors;
 }
@@ -9192,7 +9194,7 @@ function currentRoute(){const ch=db.session.channel.toLowerCase();if(ui.view==='
 function readRoute(){const bits=location.hash.replace(/^#\/?/,'').split('/');const view=bits[0];if(!Object.keys(VIEW_LABELS).includes(view))return null;if(['build','scale','report'].includes(view)&&bits[1]&&!['cd','mess'].includes(bits[1]))return null;
  if(view==='settings'){const tab=['subjects','campaign','titles','pages','export','manage','backup','more'].includes(bits[1])?bits[1]:'subjects';return {view:tab==='export'?'studio':tab==='backup'?'backup':tab==='more'?'help':'settings',tab};}
  return {view,channel:['cd','mess'].includes(bits[1])?bits[1].toUpperCase():null};}
-function applyRoute(route){if(!route)return;ui.view=route.view;if(route.tab)ui.simpleConfig=route.tab;if(route.channel&&route.channel!==db.session.channel){SieuGoogle.abort();db.session.channel=route.channel;const wid=user().defaultKho[route.channel];db.session.warehouse=db.warehouses.find(w=>!w.archived&&w.id===wid&&w.channels.includes(route.channel))?.id||db.warehouses.find(w=>!w.archived&&w.channels.includes(route.channel))?.id||db.session.warehouse;}db.lastView=ui.view;}
+function applyRoute(route){if(!route)return;ui.view=route.view;if(route.tab)ui.simpleConfig=route.tab;if(route.channel&&route.channel!==db.session.channel){sheetScopeEpoch++;SieuGoogle.abort();db.session.channel=route.channel;const wid=user().defaultKho[route.channel];db.session.warehouse=db.warehouses.find(w=>!w.archived&&w.id===wid&&w.channels.includes(route.channel))?.id||db.warehouses.find(w=>!w.archived&&w.channels.includes(route.channel))?.id||db.session.warehouse;}db.lastView=ui.view;}
 function prepareRoute(){if(routeLoaded)return;routeLoaded=true;applyRoute(readRoute());}
 function syncRoute(){if(routeApplying)return;const next=currentRoute();if(location.hash!==next){if(!location.hash)history.replaceState({},'',next);else history.pushState({},'',next);}}
 function routeNavigation(){const route=readRoute();if(!route)return;const before=currentRoute();routeApplying=true;applyRoute(route);const after=currentRoute();if(before!==after){ui.page=1;ui.query='';closeModal();render();save();}routeApplying=false;}
@@ -9233,8 +9235,8 @@ function historyView(){const list=db.builds.filter(x=>x.user===user().id);return
 function backupView(){return card('Backup trên máy',msg('File backup chứa cấu hình và dữ liệu của các hồ sơ trên máy. Dùng để chuyển máy; không có tự đồng bộ giữa máy khác nhau.')+`<div class="actions">${btn('backup-all','Tải backup toàn bộ',{},'primary')}${btn('file','Khôi phục backup toàn bộ',{kind:'backup'})}${btn('backup-config','Backup hồ sơ hiện tại')}${btn('file','Nhập cấu hình hồ sơ',{kind:'config'})}${btn('file','Nhập backup bản HTML cũ',{kind:'legacy'})}${btn('checkpoint','Lưu điểm phục hồi')}</div>`)+card('Điểm phục hồi · '+user().name,db.checkpoints.filter(x=>x.user===user().id).map(x=>`<div class="source-line"><div><b>${esc(x.label)}</b><small>${esc(x.warehouse)} · ${x.channel} · ${new Date(x.at).toLocaleString('vi-VN')}</small></div><div class="actions">${btn('restore-checkpoint','Phục hồi',{id:x.id})}${btn('delete-checkpoint','Xóa',{id:x.id})}</div></div>`).join('')||'<p>Chưa có checkpoint.</p>');}
 function referenceFixes(){return card('Đối chiếu với mẫu Google Sites bạn gửi',grid(['Phần','Điều chỉnh trong bản gọn'],[{Phần:'Giao diện','Điều chỉnh trong bản gọn':'Giữ 5 tab ngang; Daily hai ô nhập và bảng kết quả. Các thiết lập ít dùng được thu gọn.'},{Phần:'Đổi Kho / hồ sơ','Điều chỉnh trong bản gọn':'Giữ phiên riêng, không tự nạp dữ liệu mẫu hoặc lấy cấu hình của hồ sơ khác.'},{Phần:'Nguồn file','Điều chỉnh trong bản gọn':'Chọn Sheet / dòng Header / cột, không âm thầm cắt ở dòng 300; có giới hạn nhập được kiểm tra rõ.'},{Phần:'Xuất ADS','Điều chỉnh trong bản gọn':'Kiểm tra dòng lỗi trước xuất, giữ Title PH và Title MESS theo cấu hình, Video ID / Image Hash đúng loại.'},{Phần:'Link test content','Điều chỉnh trong bản gọn':'Dùng Permalink; không lấy link landing hoặc link rút gọn thay cho link bài. CĐ vẫn theo các dòng Daily đã tích.'},{Phần:'Siêu Báo Cáo','Điều chỉnh trong bản gọn':'Giữ 8B riêng, -L12 riêng, ghép mã có xác nhận, công thức tương đối và xuất không Header.'},{Phần:'Mẫu xuất','Điều chỉnh trong bản gọn':'Tách theo hồ sơ + Kho + kênh; kiểm tra rồi lưu trong một nút. Có tên file / Sheet và khôi phục nháp.'}]))};function helpView(){const u=user(),seed=SEED.users.find(x=>x.id===u.id),diffs=[];for(const s of u.config.subjectLinks){const m=u.master?.subjects?.find(x=>canon(x.id).replace('Á','A')===canon(s.code).replace('Á','A'));if(m?.baseLink&&m.baseLink!==s.url)diffs.push(s.name+': Builder '+s.url+'; Master '+m.baseLink+' (ưu tiên Master).');}return referenceFixes()+card('Đối chiếu với Siêu Ads',`<p>Đây là bản dự phòng để duyệt trước khi thay Google Sites. Dữ liệu paste/file là đầu vào thật; cấu hình web không tự cập nhật theo các thay đổi về sau.</p><p>Bản lõi nguồn <code>${esc(SEED.sourceCommit)}</code> · snapshot cấu hình ngày ${esc(SEED.capturedAt)}. Hồ sơ ${esc(u.name)} lấy từ ${seed?'Active web v'+seed.builderVersion:'hồ sơ mới trên máy'}.</p><div class="table-wrap"><table><thead><tr><th>Nhóm</th><th>Bản dự phòng</th><th>Khác bản web</th></tr></thead><tbody>${[['Nguồn Content','Paste 5 ô hoặc file, Catalog snapshot cục bộ','Không gọi Google Sheet/Drive, không Auto Sync'],['Người dùng','ThoLD / My / Huyền / thêm hồ sơ','Chọn hồ sơ, không phải tài khoản có xác thực/phân quyền'],['Cấu hình','Active + nháp riêng theo hồ sơ; mẫu theo Kho/kênh','Lưu trên máy, không Supabase'],['Daily / Build','Lõi quy tắc từ Siêu Ads, chỉnh Page/Title/media, XLSX','Dùng nguồn thủ công đã nhập'],['Scale','Lõi clone/integrity CĐ/MESS, giữ source headers','File nhập trên máy'],['Siêu Báo Cáo','Lõi Meta/CRM, 8B, công thức, preflight, link, trace','Có thêm nút backup/profile/checkpoint và XLSX không Header'],['Page','Registry đúng snapshot từng user/Kho','Không dùng Page mẫu giả của HTML cũ'],['CPU','Không gọi Vercel, không server Siêu Ads','Vẫn dùng CPU/RAM của máy khi xử lý file'],['CDN','Không font/script tải ngoài','Có thể mở file không mạng'],['Quản lý tài khoản / audit','Không có trong bản dự phòng','Ba module theo yêu cầu đã loại'],['Tài khoản mới','Tạo cấu hình nền riêng; có thể chủ động copy mẫu','Không tự lấy Page/media cá nhân của người khác']].map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>${!u.config.parentTitlePresetId?msg('Khác biệt cấu hình cần xử lý: hồ sơ chưa chọn Title phụ huynh CĐ. Chọn preset đang bật ở Cấu hình → Content & Title trước khi xuất dòng PH.','warn'):''}${diffs.map(x=>msg(x,'warn')).join('')}<details><summary>Cấu hình web gốc của hồ sơ</summary><pre>${esc(JSON.stringify(seed||{},null,2))}</pre></details><p>Bản HTML cũ tự chọn môn Toán/Page đầu tiên và dùng dữ liệu mẫu sẵn có. Bản này không đoán Page khi thiếu/mâu thuẫn; dữ liệu mẫu chỉ nạp bằng nút riêng.</p>`)+card('Các quy tắc cần nhớ',`<ul><li>VIDEO: Video ID; Image Hash để trống. ANH: Image Hash.</li><li>8B khác mã thường; không auto gộp.</li><li>L1–L1000 sát mã có thể gộp; -L12 giữ riêng.</li><li>Ghi chú báo cáo chỉ “test mới” khi có link hợp lệ.</li><li>Title PH CĐ lấy preset PH; Title MESS theo Content Rule / loại Page / mẫu.</li><li>Dữ liệu được tách hồ sơ + Kho + kênh. Tải backup để chuyển máy.</li></ul><div class="actions">${btn('load-demo','Nạp dữ liệu kiểm tra cho scope hiện tại')}${btn('restore-seed-user','Nạp lại cấu hình web gốc vào nháp')}${btn('self-check','Kiểm tra lõi quy tắc')}</div>`);}
 const pendingImports=[];let worker=null,workerSeq=0,workerRequests=new Map();
-function openModal(title,body,actions=''){const d=$('#modal'),mt=$('#modal-toast');if(mt)mt.hidden=true;$('#modal-title').textContent=title;$('#modal-body').innerHTML=body;$('#modal-actions').innerHTML=actions+btn('close-modal','Đóng');if(!d.open)d.showModal();}
-function closeModal(){modalState=null;$('#modal').close();}
+function openModal(title,body,actions=''){sheetSyncModalContext=null;const d=$('#modal'),mt=$('#modal-toast');if(mt)mt.hidden=true;$('#modal-title').textContent=title;$('#modal-body').innerHTML=body;$('#modal-actions').innerHTML=actions+btn('close-modal','Đóng');if(!d.open)d.showModal();}
+function closeModal(){if(sheetSyncModalContext){$('#modal-body').replaceChildren();$('#modal-actions').replaceChildren();}sheetSyncModalContext=null;modalState=null;$('#modal').close();}
 function workerCall(cmd,payload,transfer=[]){if(typeof Worker==='undefined'){if(cmd==='aggregate')return Promise.resolve(C.aggregatePositiveMetaRows(payload));return Promise.reject(Error('Worker không khả dụng'));}if(!worker){const text=document.getElementById('vendor').textContent+'\n'+document.getElementById('core').textContent+'\n'+document.getElementById('worker-code').textContent;const url=URL.createObjectURL(new Blob([text],{type:'text/javascript'}));worker=new Worker(url);URL.revokeObjectURL(url);worker.onmessage=e=>{const r=workerRequests.get(e.data.id);if(!r)return;if(e.data.progress){const el=$('#import-progress');if(el)el.textContent=e.data.progress;return;}workerRequests.delete(e.data.id);e.data.error?r.reject(Error(e.data.error)):r.resolve(e.data.result);};worker.onerror=e=>{for(const r of workerRequests.values())r.reject(Error(e.message||'Worker không chạy được'));workerRequests.clear();worker.terminate();worker=null;};}return new Promise((resolve,reject)=>{const n=++workerSeq;workerRequests.set(n,{resolve,reject});worker.postMessage({id:n,cmd,...payload},transfer);});}
 function cancelImport(){importCancel++;if(worker){worker.terminate();worker=null;}for(const r of workerRequests.values())r.reject(Error('Đã hủy import'));workerRequests.clear();notice('Đã hủy import đang chạy; dữ liệu đã nhập được giữ.','warn');}
 async function readMatrices(file){C.assertFileSize(file,file.name.endsWith('.json')?C.PRODUCTION_LIMITS.maxBackupFileBytes:C.PRODUCTION_LIMITS.maxUploadFileBytes);if(/\.xls$/i.test(file.name))throw Error('Định dạng XLS cũ chưa hỗ trợ; lưu lại thành XLSX/CSV.');const buffer=await file.arrayBuffer();try{return await workerCall('parse',{name:file.name,buffer},[buffer]);}catch(e){if(/hủy/.test(e.message))throw e;notice('Worker bị chặn; đang đọc file trên trình duyệt.','warn');const b=await file.arrayBuffer();if(/\.xlsx$/i.test(file.name)){const wb=new ExcelJS.Workbook();await wb.xlsx.load(b);return wb.worksheets.map(ws=>matrixFromSheet(ws));}return[{name:file.name,matrix:C.parseAdsTemplateCsv(new Uint8Array(b)).rows,formulaCells:[]}];}}
@@ -9301,7 +9303,7 @@ case 'open-sheet-sync':openSheetSyncModal();return;
 case 'quick-sheet-sync':{
   const cfg=sheetSyncConfig();
   if(!cfg.url&&!cfg.webappUrl){openSheetSyncModal();return;}
-  await executeSheetSync(false);
+  await executeSheetSync(false,false);
   return;
 }
 case'oauth-connect-google':{if($('#sync-auth-mode'))$('#sync-auth-mode').value='oauth';const cfg=saveSheetSyncConfigFromDom(),token=capture();await requestGoogleOAuthToken(cfg.oauthClientId||db.oauthClientId);guard(token);openSheetSyncModal();notice('Đã cấp quyền Google cho hồ sơ này. Chọn đúng Kho và bấm Đọc thử cột trước khi đồng bộ.','success');return;}
@@ -9438,10 +9440,10 @@ case 'delete-report-profile':if(r.profile.source==='default')throw Error('Không
 case 'backup-report-profiles':download('SieuAds_Report_Profiles.json',C.serializeProfiles([C.defaultReportProfile('cd'),C.defaultReportProfile('mess'),...r.profiles]));return;
 case 'backup-report':download('SieuAds_Phiên_'+db.session.channel+'.json',JSON.stringify(namedBackup('SIEUADS_REPORT_SESSION',{channel:db.session.channel,data:r}),null,2));return;
 case 'checkpoint':checkpoint('Điểm phục hồi thủ công');notice('Đã lưu điểm phục hồi trên máy','success');break;
-case 'restore-checkpoint':{const p=db.checkpoints.find(x=>x.id===a.id&&x.user===u.id);if(!p)throw Error('Không có điểm phục hồi');checkpoint('Trước phục hồi');db.session.warehouse=p.warehouse;wh().archived=false;db.session.channel=p.channel;db.scopes[scopeKey()]=restoreScopedRows(p);db.reports[key(u.id,p.channel)]=clone(p.report);report().ack=[];break;}
+case 'restore-checkpoint':{const p=db.checkpoints.find(x=>x.id===a.id&&x.user===u.id);if(!p)throw Error('Không có điểm phục hồi');checkpoint('Trước phục hồi');sheetScopeEpoch++;SieuGoogle.abort();db.session.warehouse=p.warehouse;wh().archived=false;db.session.channel=p.channel;db.scopes[scopeKey()]=restoreScopedRows(p);db.reports[key(u.id,p.channel)]=clone(p.report);report().ack=[];break;}
 case 'delete-checkpoint':db.checkpoints=db.checkpoints.filter(x=>x.id!==a.id||x.user!==u.id);break;
 case 'backup-all':await persistNow();download('SieuAds_Backup_'+dateParts().iso+'.json',JSON.stringify(namedBackup('SIEUADS_OFFLINE_BACKUP',{data:db}),null,2));return;
-case 'confirm-restore-backup':{if(modalState?.type!=='restoreBackup')throw Error('Backup hết hiệu lực');const incoming=clone(modalState.data);validateBackup(incoming);download('SieuAds_Truoc_Khoi_Phuc_'+Date.now()+'.json',JSON.stringify(namedBackup('SIEUADS_OFFLINE_BACKUP',{data:db})));db=incoming;db.revision=storeRev;closeModal();break;}
+case 'confirm-restore-backup':{if(modalState?.type!=='restoreBackup')throw Error('Backup hết hiệu lực');const incoming=clone(modalState.data);validateBackup(incoming);download('SieuAds_Truoc_Khoi_Phuc_'+Date.now()+'.json',JSON.stringify(namedBackup('SIEUADS_OFFLINE_BACKUP',{data:db})));sheetScopeEpoch++;SieuGoogle.abort();db=incoming;db.revision=storeRev;repairLegacySourceScopes();closeModal();break;}
 case 'confirm-config-import':{if(modalState?.type!=='importConfig')throw Error('File hết hiệu lực');const x=clone(modalState.user);if(a.newUser){const code=x.id||x.config.nameCode;if(db.users.some(u=>u.id===code))throw Error('Mã hồ sơ đã tồn tại; chọn nhập vào hồ sơ hiện tại hoặc đổi mã trong file');db.users.push(seedUser(x));db.session.user=code;}else{u.draft=clone(x.config);if(x.templates)u.templateImport=clone(x.templates);openModal('Đã nhận cấu hình vào nháp',msg('Cấu hình chung chưa kích hoạt. Có thể nhập kèm template/Registry đúng hồ sơ từ file backup.'),btn('apply-imported-extras','Nhận kèm Master, template và Registry vào nháp'));modalState={type:'configExtras',user:x};save();render();return;}closeModal();break;}
 case 'apply-imported-extras':if(modalState?.type==='configExtras'){const x=modalState.user;u.masterDraft=clone(x.master||u.master);for(const [k,t]of Object.entries(x.templates||{}))u.templateDrafts[k]=clone(t.payload);for(const[k,v]of Object.entries(x.registries||{}))u.registryDrafts[k]=clone(v);}closeModal();break;
 case 'backup-config':download('SieuAds_Config_'+u.config.nameCode+'.json',JSON.stringify(namedBackup('SIEUADS_USER_CONFIG',{user:u}),null,2));return;
@@ -9626,6 +9628,15 @@ function fillDailyRowsFromCatalog(catRows,catLayout,populateTable=true){
   if(populateTable&&!ws.fiveRows.length)ws.fiveRows.push(['','','','','']);
   return matchedCount;
 }
+function defaultSheetSyncConfig(wId,ch){return {
+                url: ch === 'MESS' && wId === 'moet' ? 'https://docs.google.com/spreadsheets/d/1oyxp-H_6E9TXnyjrhdFtNLI7pojoj5-K0zBG6uBsFC0/edit' : (ch === 'MESS' && wId === 'gia-su-toan-khtn' ? 'https://docs.google.com/spreadsheets/d/1WdsKQMMkZ3LP-aKrXLItFnRINRtyYSY-xQpznR5EMWs/edit?gid=0#gid=0' : (ch === 'CD' && wId === 'thcs' ? 'https://docs.google.com/spreadsheets/d/1jlo7k6ht55rt78Ucty9TC0qI8yXJZjpZ/edit' : (ch === 'CD' && wId === 'tieu-hoc' ? 'https://docs.google.com/spreadsheets/d/1y8cO8DG-80zVb7NddSrOyi0hcuZYdZcz/edit?gid=1259417001#gid=1259417001' : ''))),
+                sheetName: ch === 'MESS' && wId === 'moet' ? 'CAPTION mess' : (ch === 'MESS' && wId === 'gia-su-toan-khtn' ? 'MESS TOÁN' : (ch === 'CD' && wId === 'thcs' ? 'Content' : (ch === 'CD' && wId === 'tieu-hoc' ? 'Caption' : ''))),
+                webappUrl: '',
+                webappSecret: '',
+                oauthClientId: db.oauthClientId || '',
+                authMode: 'oauth',
+                colRules: { headerRow: '', contentCode: 'auto', caption: 'auto', mediaCode: 'auto', mixCode: 'auto', pageRaw: 'auto' }
+            };}
 function sheetSyncConfig(wId = wh().id, ch = db.session.channel) {
         db.warehouseSheetSync ??= {};
         const sk = key(wId, ch);
@@ -9637,21 +9648,14 @@ function sheetSyncConfig(wId = wh().id, ch = db.session.channel) {
                     break;
                 }
             }
-            db.warehouseSheetSync[sk] = legacy || {
-                url: ch === 'MESS' && wId === 'moet' ? 'https://docs.google.com/spreadsheets/d/1oyxp-H_6E9TXnyjrhdFtNLI7pojoj5-K0zBG6uBsFC0/edit' : (ch === 'MESS' && wId === 'gia-su-toan-khtn' ? 'https://docs.google.com/spreadsheets/d/1WdsKQMMkZ3LP-aKrXLItFnRINRtyYSY-xQpznR5EMWs/edit?gid=0#gid=0' : (ch === 'CD' && wId === 'thcs' ? 'https://docs.google.com/spreadsheets/d/1jlo7k6ht55rt78Ucty9TC0qI8yXJZjpZ/edit' : (ch === 'CD' && wId === 'tieu-hoc' ? 'https://docs.google.com/spreadsheets/d/1y8cO8DG-80zVb7NddSrOyi0hcuZYdZcz/edit?gid=1259417001#gid=1259417001' : ''))),
-                sheetName: ch === 'MESS' && wId === 'moet' ? 'CAPTION mess' : (ch === 'MESS' && wId === 'gia-su-toan-khtn' ? 'MESS TOÁN' : (ch === 'CD' && wId === 'thcs' ? 'Content' : (ch === 'CD' && wId === 'tieu-hoc' ? 'Caption' : ''))),
-                webappUrl: '',
-                webappSecret: '',
-                oauthClientId: db.oauthClientId || '',
-                authMode: 'oauth',
-                colRules: { headerRow: '', contentCode: 'auto', caption: 'auto', mediaCode: 'auto', mixCode: 'auto', pageRaw: 'auto' }
-            };
+            db.warehouseSheetSync[sk] = legacy || defaultSheetSyncConfig(wId,ch);
         }
         db.warehouseSheetSync[sk].colRules ??= { headerRow: '', contentCode: 'auto', caption: 'auto', mediaCode: 'auto', mixCode: 'auto', pageRaw: 'auto' };
         if (!db.warehouseSheetSync[sk].oauthClientId && db.oauthClientId)
             db.warehouseSheetSync[sk].oauthClientId = db.oauthClientId;
         const cfg=db.warehouseSheetSync[sk];
- cfg.sourceKind??=(wId==='tieu-hoc'&&ch==='CD'?'xlsx':'sheets');
+ if(cfg.scope&&(cfg.scope.warehouseId!==wId||cfg.scope.channel!==ch))throw Error('Cấu hình nguồn không thuộc Kho và kênh đang chọn.');
+ cfg.sourceKind??=(['thcs','tieu-hoc'].includes(wId)&&ch==='CD'?'xlsx':'sheets');
  cfg.authMode??=(cfg.webappUrl?'webapp':cfg.sourceKind==='xlsx'||cfg.oauthClientId?'oauth':'public');
  const untouched=!cfg.colRules.headerRow&&['contentCode','caption','mediaCode','mixCode','pageRaw'].every(k=>!cfg.colRules[k]||cfg.colRules[k]==='auto');
  if(untouched&&wId==='tieu-hoc'&&ch==='CD'&&String(cfg.url).includes('1y8cO8DG-80zVb7NddSrOyi0hcuZYdZcz'))cfg.colRules={headerRow:'3',contentCode:'B',caption:'C',mediaCode:'D',mixCode:'F',pageRaw:'E'};
@@ -9662,7 +9666,11 @@ function getOAuthToken(){return !!SieuGoogle.status(user().id,sheetSyncConfig().
 
 function clearOAuthToken(){SieuGoogle.forget();}
 function requestGoogleOAuthToken(clientId){const cfg=sheetSyncConfig();if(location.protocol!=='https:'&&location.hostname!=='localhost')throw Error('OAuth cần mở bản HTML qua HTTPS trên tên miền đã đăng ký, không dùng file://. Dữ liệu hiện tại vẫn giữ trên máy.');return SieuGoogle.connect({clientId,profile:user().id,excel:cfg.sourceKind==='xlsx'});}
+function sheetSyncContext(){return{token:capture(),epoch:sheetScopeEpoch,warehouseId:wh().id,channel:db.session.channel};}
+function guardSheetSyncContext(ctx){guard(ctx.token);if(ctx.epoch!==sheetScopeEpoch||ctx.warehouseId!==wh().id||ctx.channel!==db.session.channel)throw Error('Phiên đồng bộ đã đổi; kết quả cũ được bỏ qua.');}
 function saveSheetSyncConfigFromDom() {
+        if(!$('#modal')?.open||!sheetSyncModalContext)throw Error('Cửa sổ nguồn đã đóng. Mở lại Map cột của Kho đang chọn.');
+        guardSheetSyncContext(sheetSyncModalContext);
         const cfg = sheetSyncConfig(),priorClient=cfg.oauthClientId||db.oauthClientId||'';
  if($('#sync-source-kind'))cfg.sourceKind=$('#sync-source-kind').value;
  if($('#sync-auth-mode'))cfg.authMode=$('#sync-auth-mode').value;
@@ -9688,7 +9696,8 @@ function saveSheetSyncConfigFromDom() {
                 cfg.colRules[f] = el.value.trim() || 'auto';
         }
         if(priorClient!==(cfg.oauthClientId||db.oauthClientId||''))SieuGoogle.forget();
-        // Propagate warehouse layout & sheet sync config across all users
+        cfg.scope={warehouseId:sheetSyncModalContext.warehouseId,channel:sheetSyncModalContext.channel};
+        // Share the source configuration only within this warehouse and channel.
         for (const u of db.users || []) {
             u.sheetSync ??= {};
             u.sheetSync[key(wh().id, db.session.channel)] = clone(cfg);
@@ -9725,6 +9734,7 @@ function openSheetSyncModal(previewHeaders=null,previewRows=null){
  ${samples.length?`<div class="table-wrap source-preview"><table><thead><tr><th>Mã</th><th>Nội dung</th><th>Media</th><th>MIX</th><th>Page</th></tr></thead><tbody>${samples.slice(0,3).map(r=>`<tr><td>${esc(r.contentCode)}</td><td><span class="body-snippet">${esc(r.caption||'—')}</span></td><td>${esc(r.mediaCode)}</td><td>${esc(r.mixCode)}</td><td>${esc(r.pageRaw)}</td></tr>`).join('')}</tbody></table></div>`:''}
  <details class="fold source-help"><summary>Tùy chọn</summary><p>Kho dùng chung giữa các hồ sơ trên trình duyệt này. Máy khác nhận cấu hình qua Backup.</p><p>Excel tải cả workbook, tối đa 20 MB. Chỉ kiểm tra cột đã map, từ dòng sau Header.</p>${btn('edit-warehouse','Đổi thứ tự cột',{id:wh().id})}<div class="form-grid"><label>Apps Script URL<input id="sync-webapp-url" value="${esc(cfg.webappUrl||'')}" placeholder="Chỉ dùng với kết nối Apps Script"></label><label>Khóa Apps Script<input id="sync-webapp-secret" type="password" value="${esc(cfg.webappSecret||'')}"></label></div></details>
  `,btn('run-sheet-sync','Lưu & đồng bộ',{},'primary')+btn('save-sheet-config-only','Lưu cột')+btn('file','Tệp .xlsx',{kind:'source'}));
+ sheetSyncModalContext=sheetSyncContext();
 }
 
 async function fetchSheetMatricesLegacy(cfg) {
@@ -9791,19 +9801,20 @@ async function fetchSheetMatricesLegacy(cfg) {
         return { sheets, sourceTitle };
     }
 async function fetchSheetMatrices(cfg,previewOnly=false){
- if(cfg.authMode==='oauth')return SieuGoogle.read(cfg,{profile:user().id,clientId:cfg.oauthClientId||db.oauthClientId||''},matrix=>autoDetectCompanySheet(matrix,wh().layout,cfg.colRules),previewOnly);
+ const ctx=sheetSyncContext(),layout=clone(wh().layout),profile=user().id;
+ if(cfg.authMode==='oauth')return SieuGoogle.read(cfg,{profile,clientId:cfg.oauthClientId||db.oauthClientId||''},matrix=>{guardSheetSyncContext(ctx);return autoDetectCompanySheet(matrix,layout,cfg.colRules);},previewOnly);
  if(cfg.sourceKind==='xlsx')throw Error('Excel riêng tư cần chọn Google OAuth; không tự chuyển sang nguồn công khai.');
  if(cfg.authMode==='webapp'&&!cfg.webappUrl)throw Error('Chưa nhập URL Apps Script đã có.');
  return fetchSheetMatricesLegacy({...cfg,webappUrl:cfg.authMode==='webapp'?cfg.webappUrl:'',oauthClientId:''});
 }
-async function executeSheetSync(previewOnly = false) {
+async function executeSheetSync(previewOnly = false, fromModal = true) {
         if(googleSyncBusy)throw Error('Một tác vụ đồng bộ đang chạy. Đợi kết thúc trước khi bấm lại.');
- const cfg=clone(saveSheetSyncConfigFromDom()),token=capture(),startView=ui.view,startModal=modalState,warehouseId=wh().id,channel=db.session.channel,configKey=JSON.stringify(cfg),catalogKey=JSON.stringify([sharedCatalog()?.version,sharedCatalog()?.at]),dailyKey=JSON.stringify([workspace().dailyPaste,workspace().fiveRows]);
+ const ctx=sheetSyncContext(),cfg=clone(fromModal?saveSheetSyncConfigFromDom():sheetSyncConfig()),token=capture(),startView=ui.view,startModal=modalState,startSheetModal=sheetSyncModalContext,warehouseId=wh().id,channel=db.session.channel,configKey=JSON.stringify(cfg),catalogKey=JSON.stringify([sharedCatalog()?.version,sharedCatalog()?.at]),dailyKey=JSON.stringify([workspace().dailyPaste,workspace().fiveRows]);
  googleSyncBusy=true;try{
         const layout = wh().layout;
         notice('Đang kết nối và tải dữ liệu từ Google Sheet vào kho ' + wh().name + '…', 'info');
         const { sheets, sourceTitle } = await fetchSheetMatrices(cfg,previewOnly);
- guard(token);if(JSON.stringify(sheetSyncConfig())!==configKey)throw Error('Cấu hình nguồn đã đổi trong lúc đọc. Catalog cũ được giữ; đọc lại bằng cấu hình mới.');
+ guardSheetSyncContext(ctx);guard(token);if(fromModal&&(!$('#modal')?.open||sheetSyncModalContext!==startSheetModal))throw Error('Cửa sổ nguồn đã đóng hoặc đổi; kết quả cũ được bỏ qua.');if(JSON.stringify(sheetSyncConfig())!==configKey)throw Error('Cấu hình nguồn đã đổi trong lúc đọc. Catalog cũ được giữ; đọc lại bằng cấu hình mới.');
  if(JSON.stringify([sharedCatalog()?.version,sharedCatalog()?.at])!==catalogKey)throw Error('Catalog đã được cập nhật trong lúc đọc. Chưa ghi đè; kiểm tra lại phiên hiện tại.');
         const extracted = [];
         let detectedHeaders = [], sampleRows = [];
@@ -9864,11 +9875,11 @@ async function executeSheetSync(previewOnly = false) {
         if (!extracted.length)
             throw Error('Không tìm thấy cột Mã Content / Caption / Media / Mix hợp lệ. Hãy kiểm tra lại mục Map cột của Kho!');
         const cur = sharedCatalog(), ver = (cur?.version || 0) + 1;
-        saveSharedCatalog({ version: ver, at: new Date().toISOString(), name: sourceTitle, rows: extracted, layout: clone(layout), detectedHeaders, sampleRows },warehouseId,channel);
+        saveSharedCatalog({ version: ver, at: new Date().toISOString(), name: sourceTitle, rows: extracted, layout: clone(layout), detectedHeaders, sampleRows,scope:{warehouseId,channel},source:{url:cfg.url,sheetName:cfg.sheetName,sourceKind:cfg.sourceKind} },warehouseId,channel);
         const matchedDaily = fillDailyRowsFromCatalog(extracted, layout,JSON.stringify([workspace().dailyPaste,workspace().fiveRows])===dailyKey);
         workspace().sourceVersion++;
         save();
-        if (modalState===startModal && $('#modal')?.open)
+        if (fromModal && sheetSyncModalContext===startSheetModal && modalState===startModal && $('#modal')?.open)
             closeModal();
         if(ui.view===startView)render();
         notice(`✓ Đã đồng bộ ${extracted.length} mã vào kho ${wh().name} (${db.session.channel}) cho tất cả User` + (matchedDaily ? ` · Khớp ${matchedDaily} dòng Daily!` : '!'), 'success');
@@ -10187,6 +10198,31 @@ function applyPageSetup(){let count=0;
  }
  return count;
 }
+
+function repairLegacySourceScopes(){
+ let changed=0;db.warehouseSheetSync??={};db.sourceScopeRepairs??={};
+ for(const u of db.users)for(const [sk,cfg] of Object.entries(u.sheetSync||{}))if(!db.warehouseSheetSync[sk])db.warehouseSheetSync[sk]=clone(cfg);
+ const builtins=WAREHOUSES.flatMap(w=>w.channels.map(ch=>({warehouseId:w.id,channel:ch,cfg:defaultSheetSyncConfig(w.id,ch)}))).filter(x=>x.cfg.url);
+ const fileId=url=>String(url||'').match(/\/d\/([\w-]+)/)?.[1]||'';
+ for(const [sk,config] of Object.entries(db.warehouseSheetSync)){
+  if(config.scope)continue;
+  const [wid,ch]=sk.split('|'),expected=builtins.find(x=>x.warehouseId===wid&&x.channel===ch),foreign=builtins.find(x=>fileId(x.cfg.url)===fileId(config.url));
+  if(!expected||!foreign||key(foreign.warehouseId,foreign.channel)===sk)continue;
+  const cats=[db.sharedSources?.[sk],...db.users.map(u=>u.sources?.[sk])].filter(Boolean);
+  const badRows=new Set(cats.flatMap(cat=>(cat.rows||[]).map(r=>JSON.stringify(r))));
+  const recovery={at:new Date().toISOString(),fromScope:key(foreign.warehouseId,foreign.channel),config:clone(config),sharedSource:clone(db.sharedSources?.[sk]||null),userSources:{},workspaceRows:{},pending:true};
+  const clean=clone(expected.cfg);clean.oauthClientId=db.oauthClientId||config.oauthClientId||'';clean.scope={warehouseId:wid,channel:ch};
+  if(['thcs','tieu-hoc'].includes(wid)&&ch==='CD')clean.sourceKind='xlsx';
+  for(const u of db.users){recovery.userSources[u.id]=clone(u.sources?.[sk]||null);if(u.sources)delete u.sources[sk];u.sheetSync??={};u.sheetSync[sk]=clone(clean);}
+  for(const [wk,ws] of Object.entries(db.scopes||{})){if(wk.split('|').slice(1).join('|')!==sk)continue;
+   const rows=ws.fiveRows||[];if(rows.some(r=>badRows.has(JSON.stringify(r)))){recovery.workspaceRows[wk]=clone(rows);ws.fiveRows=rows.filter(r=>!badRows.has(JSON.stringify(r)));}
+  }
+  db.warehouseSheetSync[sk]=clean;if(db.sharedSources)delete db.sharedSources[sk];
+  db.sourceScopeRepairs[sk]=recovery;changed++;
+ }
+ return changed;
+}
+
 let releaseMigrationDirty=false;
 async function readPassedReview(){let source;try{
  if(typeof indexedDB.databases!=='function')return null;
@@ -10393,7 +10429,7 @@ function handleSmartReactiveUpdate(el){
   return false;
 }
 function updateBinding(el){let value=el.type==='checkbox'?el.checked:el.type==='number'?(el.value===''?'':Number(el.value)):el.value;if(el.dataset.list)value=String(value).split(/\r?\n/).map(x=>x.trim()).filter(Boolean);if(el.dataset.json){try{value=JSON.parse(el.value);}catch{el.setCustomValidity('JSON chưa hợp lệ');return false;}}el.setCustomValidity?.('');const path=decode(el.dataset.path);if(el.dataset.root==='work'&&path[0]==='budgetOverride'){if(el.value.trim()===''){delete workspace().budgetOverride;}else{const num=Number(el.value);workspace().budgetOverride=num;if(Number.isFinite(num)&&num>0){const bCol=db.session.channel==='MESS'?'Ad Set Daily Budget':'Campaign Daily Budget';for(const ed of Object.values(workspace().buildEdits||{})){if(ed&&typeof ed==='object')delete ed[bCol];}}}save();return true;}set(resolveRoot(el.dataset.root),path,value);if(el.dataset.root==='warehouse'&&path[0]==='channelChoice'){wh().channels=value.split(',');if(!wh().channels.includes(db.session.channel))db.session.channel=wh().channels[0];}save();return true;}
-function switchScope(type,value){clearTimeout(compactRefresh); SieuGoogle.abort();const old=scopeKey();db.userSessions??={};db.userSessions[db.session.user]={warehouse:db.session.warehouse,channel:db.session.channel};if(type==='user'){db.session.user=value;const prior=db.userSessions[value];db.session.channel=prior?.channel||db.session.channel;db.session.warehouse=prior?.warehouse||user().defaultKho[db.session.channel];}if(type==='channel'){db.session.channel=value;const target=user().defaultKho[value];db.session.warehouse=db.warehouses.find(w=>!w.archived&&w.id===target&&w.channels.includes(value))?.id||db.warehouses.find(w=>!w.archived&&w.channels.includes(value)).id;}if(type==='warehouse')db.session.warehouse=value;if(wh()?.archived||!wh()?.channels.includes(db.session.channel))db.session.warehouse=db.warehouses.find(w=>!w.archived&&w.channels.includes(db.session.channel)).id;db.userSessions[db.session.user]={warehouse:db.session.warehouse,channel:db.session.channel};ui.page=1;ui.sourcePage=1;ui.query='';closeModal();save();render();if(old!==scopeKey())notice('Đã mở lại phiên: '+user().name+' · '+wh().name+' · '+db.session.channel);}
+function switchScope(type,value){sheetScopeEpoch++;clearTimeout(compactRefresh); SieuGoogle.abort();const old=scopeKey();db.userSessions??={};db.userSessions[db.session.user]={warehouse:db.session.warehouse,channel:db.session.channel};if(type==='user'){db.session.user=value;const prior=db.userSessions[value];db.session.channel=prior?.channel||db.session.channel;db.session.warehouse=prior?.warehouse||user().defaultKho[db.session.channel];}if(type==='channel'){db.session.channel=value;const target=user().defaultKho[value];db.session.warehouse=db.warehouses.find(w=>!w.archived&&w.id===target&&w.channels.includes(value))?.id||db.warehouses.find(w=>!w.archived&&w.channels.includes(value)).id;}if(type==='warehouse')db.session.warehouse=value;if(wh()?.archived||!wh()?.channels.includes(db.session.channel))db.session.warehouse=db.warehouses.find(w=>!w.archived&&w.channels.includes(db.session.channel)).id;db.userSessions[db.session.user]={warehouse:db.session.warehouse,channel:db.session.channel};ui.page=1;ui.sourcePage=1;ui.query='';closeModal();save();render();if(old!==scopeKey())notice('Đã mở lại phiên: '+user().name+' · '+wh().name+' · '+db.session.channel);}
 document.addEventListener('click',e=>{if(!e.target.closest('details.inline-menu'))document.querySelectorAll('details.inline-menu[open]').forEach(d=>d.removeAttribute('open'));const b=e.target.closest('[data-action],[data-view]');if(!b)return;if(b.closest('summary'))e.preventDefault();const dm=b.closest('details.inline-menu[open]');if(dm)dm.removeAttribute('open');clearTimeout(compactRefresh);if(b.tagName==='SELECT')return;safely(()=>b.dataset.view?perform('view',{view:b.dataset.view},b):perform(b.dataset.action,b.dataset.args?decode(b.dataset.args):{},b));});
 document.addEventListener('input',e=>{const el=e.target;if(el.dataset.mergeCrm){const k=decode(el.dataset.mergeCrm);report().mergeDraft??={};report().mergeDraft[k]=el.value;save();return;}if(el.dataset.root){updateBinding(el);if(!el.closest('#modal')){const path=el.dataset.path?decode(el.dataset.path):[];if(el.dataset.root==='work'&&ui.view==='daily'&&path[0]==='overrides'&&(path[2]==='shortUrl'||path[2]==='date')){updateDailyRowInPlace(path[1]);return;}if(el.dataset.root==='work'&&ui.view==='build'&&(path[0]==='overrides'||path[0]==='buildEdits'||path[0]==='budgetOverride')){refreshBuildStatusInPlace(el,path);return;}if((el.dataset.root==='work'&&ui.view!=='scale')||el.dataset.root==='report'){clearTimeout(compactRefresh);compactRefresh=setTimeout(async()=>{if(el.dataset.root==='report'&&path.includes('metaPaste')){const txt=report().metaPaste?.trim();if(txt){const mat=C.parseDelimitedMatrix(txt,'\t');if(mat.length>=2){const sug=C.suggestMetaMapping(mat[0],db.session.channel==='CD'?'cd':'mess');if(sug.ready){try{await perform('apply-meta-paste');return;}catch{}}}}else{report().sources=report().sources.filter(s=>s.name!=='Bảng dán Meta');reportCache=null;save();}}if(handleSmartReactiveUpdate(el))return;if(el.isConnected&&document.activeElement===el)refreshFocus(el);},250);}}return;}if(el.dataset.ui){ui[el.dataset.ui]=el.type==='checkbox'?el.checked:el.type==='number'?Number(el.value):el.value;ui.page=1;if(ui.view==='daily'&&el.dataset.ui==='query'){refreshDailyTableOnly();return;}if(ui.view==='report'&&el.dataset.ui==='reportQuery'){refreshReportOutputOnly();return;}if(el.type==='search'||['query','scaleQuery','reportQuery'].includes(el.dataset.ui))refreshFocus(el);return;}if(el.dataset.pageSearch){const rid=decode(el.dataset.pageSearch),q=el.value.toLocaleLowerCase('vi'),select=el.parentElement.querySelector('[data-field="pageId"]');if(select)for(const op of select.options)op.hidden=!!op.value&&!op.textContent.toLocaleLowerCase('vi').includes(q);}});
 document.addEventListener('change',e=>safely(async()=>{const el=e.target;if(el.dataset.root&&(el.tagName==='TEXTAREA'||(el.tagName==='INPUT'&&!['checkbox','date','time','color','range','file'].includes(el.type)))&&!el.closest('#modal')){updateBinding(el);if(el.dataset.root==='work'&&decode(el.dataset.path)[0]==='dailyPaste')syncFiveSkeletonsFromDaily();save();handleSmartReactiveUpdate(el);return;}if(el.id==='file-input'){const files=[...el.files];await selectFiles(el.dataset.kind,files);return;}if(['user-select','warehouse-select','channel-select'].includes(el.id)){switchScope(el.id.split('-')[0],el.value);return;}if(el.dataset.root){if(updateBinding(el)&&!el.closest('#modal')&&(el.type==='checkbox'||el.tagName==='SELECT'||['date','time','color','range'].includes(el.type))){if(!handleSmartReactiveUpdate(el))refreshFocus(el);}return;}if(el.dataset.ui){ui[el.dataset.ui]=el.type==='checkbox'?el.checked:el.type==='number'?Number(el.value):el.value;ui.page=1;if(ui.view==='daily'&&el.dataset.ui==='dailyStatus'){refreshDailyTableOnly();return;}render();return;}if(el.dataset.row){const rid=decode(el.dataset.row),o=workspace().overrides[rid]??={};if(el.dataset.field==='pageId'){
@@ -10464,7 +10500,7 @@ $('#module-search').addEventListener('input',e=>{const q=e.target.value.trim().t
 window.addEventListener('beforeunload',e=>{if($('#save-state').textContent==='Đang lưu…'){persistNow();e.preventDefault();e.returnValue='';}});
 window.addEventListener('storage',e=>{if(!disk&&e.key===DBKEY){const r=JSON.parse(e.newValue||'null');if(r&&r.writer!==writer&&r.revision>storeRev){conflict=true;notice('Cửa sổ khác đã lưu. Tải backup phiên này rồi mở lại để tránh ghi đè.','warn');}}});
 Object.assign(window.SieuOffline,{perform,render,applyBundledConfigFixes,workspace,report,save,persistNow,selectFiles,confirmImport,normalizedFive,registry,registryDraft,configDraft,templateContexts,editorTemplateDraft,selfCheck,loadDemo,switchScope,readMatrices,validateConfig,get pendingImports(){return pendingImports;}});
-(async()=>{await initDisk();const configFixCount=applyBundledConfigFixes();if(['overview','daily','build','scale','report','settings','studio','history','backup','help'].includes(db.lastView))ui.view=db.lastView==='overview'?'daily':db.lastView;for(const def of WAREHOUSES)if(!db.warehouses.some(w=>w.id===def.id))db.warehouses.push(clone(def));render();if(configFixCount||releaseMigrationDirty||!db.savedAt)save();})().catch(e=>{document.getElementById('content').textContent='Không mở được dữ liệu: '+e.message;console.error(e);});
-document.addEventListener('change',e=>{if(['sync-source-kind','sync-auth-mode'].includes(e.target.id)){saveSheetSyncConfigFromDom();openSheetSyncModal();}});
+(async()=>{await initDisk();const configFixCount=applyBundledConfigFixes()+repairLegacySourceScopes();if(['overview','daily','build','scale','report','settings','studio','history','backup','help'].includes(db.lastView))ui.view=db.lastView==='overview'?'daily':db.lastView;for(const def of WAREHOUSES)if(!db.warehouses.some(w=>w.id===def.id))db.warehouses.push(clone(def));render();if(configFixCount||releaseMigrationDirty||!db.savedAt)save();})().catch(e=>{document.getElementById('content').textContent='Không mở được dữ liệu: '+e.message;console.error(e);});
+document.addEventListener('change',e=>{if(['sync-source-kind','sync-auth-mode'].includes(e.target.id)&&$('#modal')?.open&&sheetSyncModalContext){try{saveSheetSyncConfigFromDom();openSheetSyncModal();}catch(err){notice(err.message,'error');}}});
 })();
 </script></body></html>
