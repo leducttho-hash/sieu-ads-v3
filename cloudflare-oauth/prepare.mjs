@@ -1,4 +1,4 @@
-import {readFile,writeFile,copyFile,mkdir,rm} from 'node:fs/promises';
+import {readFile,writeFile,copyFile,mkdir,rm,cp} from 'node:fs/promises';
 import {dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 const here=dirname(fileURLToPath(import.meta.url)),root=resolve(here,'..'),out=resolve(here,'public');
@@ -29,4 +29,5 @@ await rm(out,{recursive:true,force:true});await mkdir(out,{recursive:true});
 await writeFile(resolve(out,'index.html'),html);
 await copyFile(resolve(here,'backend-client.js'),resolve(out,'backend-client.js'));
 for(const asset of ['excel-preview-worker.js','vendor-exceljs-4.4.0.min.js','EXCELJS-LICENSE.txt'])await copyFile(resolve(root,asset),resolve(out,asset));
+await cp(resolve(here,'pages'),out,{recursive:true});
 console.log('Prepared isolated OAuth pilot; original index.html unchanged.');
