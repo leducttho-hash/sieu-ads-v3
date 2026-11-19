@@ -10388,8 +10388,9 @@ function seasonalTag(identity,suffix){
 function seasonalLookupRaw(raw,cfg){
   // Known disabled markers are harmless notes for lookup; only seasonalResolve's active rules affect output.
   const rules=seasonalRules(cfg).filter(rule=>rule&&seasonalKey(rule.marker));if(!seasonalResolve(raw,rules.map(rule=>({...rule,active:true}))).matched)return raw;
-  const text=String(raw??'').normalize('NFKC').replace(/[\u200B-\u200D\u2060\uFEFF]/g,''),end=text.match(/^\s*[^\s(]+/)?.[0].length||0,markers=new Set(rules.map(rule=>seasonalKey(rule.marker)));
-  return text.replace(/\([^()]*\)|[\p{L}\p{N}_]+/gu,(token,offset)=>token.startsWith('(')||offset<end||!markers.has(seasonalKey(token))?token:'').trim();
+  const text=String(raw??'').normalize('NFKC').replace(/[\u200B-\u200D\u2060\uFEFF]/g,''),code=text.match(/^\s*([^\s(]+)/)?.[1]||'',annotations=Array.from(text.matchAll(/\([^()]*\)/g),match=>match[0]);
+  // Reconstruct only lookup evidence, so punctuation after a marker cannot join the source code when (l1)/(l2) is stripped.
+  return [code,...annotations,C.hasExternal8BMarker(text)?'8B':''].filter(Boolean).join(' ');
 }
 function seasonalIdentity(identity,raw,cfg,rule){
   if(!String(identity??'').trim())return '';

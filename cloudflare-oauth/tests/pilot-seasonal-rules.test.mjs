@@ -53,7 +53,7 @@ test('legacy L2020/L2023 suffixes compose before TET and 8B without mutating the
 
 test('lookup removes the external marker before legacy annotations, retaining the original source code and 8B evidence',()=>{
   const f=fixture();f.cfg.campaignNameConfig.contentSuffixRules=[{id:'l1',marker:'l1',suffix:'L2020',active:true}];
-  for(const raw of ['TUV123 (l1) TET','TUV123 TET (l1)','TUV123 (l1) TET 8B','TUV123 (Toán KHTN) TET','TUV123 (l1) T\u200BET']){
+  for(const raw of ['TUV123 (l1) TET','TUV123 TET (l1)','TUV123 (l1) TET 8B','TUV123 (Toán KHTN) TET','TUV123 (l1) T\u200BET','TUV123 (l1) TET.','TUV123 (l1) TET, 8B']){
     const lookup=f.ctx.seasonalLookupRaw(raw,f.cfg),stripped=f.ctx.C.stripMappedContentAnnotations(lookup,f.cfg.campaignNameConfig.contentSuffixRules);
     assert.equal(f.ctx.C.adsContentLookupIdentity(f.ctx.C.extractDailyContentCode(stripped)),'TUV123');
     assert.equal(lookup.includes('8B'),raw.includes('8B'));
