@@ -9035,6 +9035,7 @@ function mapRawFiveRow(r,i,layout){
   o.mixCode=xVal;
   const label=o.pageRaw||'',cl=label?canon(label):'',rt=cl?getRegTokens(registry()):null,isNum=label&&/^\d+$/.test(label),isType=cl?rt.types.has(cl):false,isPage=cl?rt.pages.has(cl):false;
   o.companyPage={page:isNum?'':isPage||!isType?label:'',pageType:isType?label:'',pageId:isNum?label:''};
+  if(['Mynnh','Huyenbtt'].includes(user().id)&&((wh().id==='tieu-hoc'&&db.session.channel==='CD')||(wh().id==='gia-su-toan-khtn'&&db.session.channel==='MESS')))o.companyPage=profilePageEvidence(label,o.companyPage);
   o.row=i+1;
   return o;
 }
@@ -9186,11 +9187,43 @@ function pullSelectedDailyCdLinks(r){
 }
 
 function parsePosts(text){return C.parseSuperReportLinkPaste(text,'Link Daily').rows.map(r=>({sourceLine:r.row,adName:r.rawName,permalink:r.permalink}));}
+// Keep the original per-profile Page/Loại Page mapping inside the two configured scopes.
+function profilePageRoutingEnabled(){return ['Mynnh','Huyenbtt'].includes(user().id)&&((wh().id==='tieu-hoc'&&db.session.channel==='CD')||(wh().id==='gia-su-toan-khtn'&&db.session.channel==='MESS'));}
+function profilePageTypeMatches(raw,reg=registry()){
+  const norm=value=>C.normalizePageTypeLabel(String(value||'').replace(/\s*\(\s*cap\s+no\s+media\s*\)\s*$/iu,'')).replace(/\s*\/\s*/g,' / ');
+  const label=norm(raw);return label?reg.pageTypes.filter(t=>[t.name,t.code,...(t.aliases||[])].some(value=>norm(value)===label)):[];
+}
+function profilePageEvidence(label,evidence){
+  if(!label||evidence.pageId||evidence.page&&registry().pages.some(p=>[p.name,...(p.aliases||[])].some(v=>C.normalizePageTypeLabel(v)===C.normalizePageTypeLabel(label))))return evidence;
+  const whole=profilePageTypeMatches(label);
+  // A configured compound label is one type; its stable code avoids splitting its name at '/'.
+  if(whole.length===1)return {page:'',pageType:whole[0].code,pageId:''};
+  const tokens=C.splitPageTypeLabels(label),matches=tokens.map(token=>profilePageTypeMatches(token));
+  if(tokens.length&&matches.every(types=>types.length===1))return {page:'',pageType:[...new Set(matches.map(types=>types[0].code))].join('/'),pageId:''};
+  const mapping=registry().companyColumnMapping;
+  return mapping?.pageType?.primaryHeader&&!mapping.page?.primaryHeader&&!mapping.pageId?.primaryHeader?{page:'',pageType:label,pageId:''}:evidence;
+}
+function profilePageControl(item){
+  const reg=registry(),o=item.override,p=o.pageId??item.pageSelection?.pageId??'',sourceTypes=profileSourcePageTypes(item,reg);
+  const typeId=o.pageTypeId??item.pageSelection?.pageTypeId??(sourceTypes.length===1?sourceTypes[0].typeId:'');
+  const types=reg.pageTypes.filter(type=>type.isActive);
+  const eligible=Object.prototype.hasOwnProperty.call(o,'pageTypeId')?(typeId?[typeId]:[]):typeId?[typeId]:sourceTypes.map(type=>type.typeId);
+  const pages=reg.pages.filter(page=>page.isActive&&(!eligible.length||C.registryPageTypeIds(page).some(id=>eligible.includes(id))||page.pageId===p));
+  const type=reg.pageTypes.find(type=>type.typeId===typeId),label=item.pageSelection?.pageTypeName||type?.name||sourceTypes.map(t=>t.name).join(' / ');
+  return `${pages.length>8?`<input type="search" placeholder="Tìm Page…" aria-label="Tìm Page" data-page-search="${args(item.id)}">`:''}<select data-row="${args(item.id)}" data-field="pageId" aria-label="Page ${esc(item.contentCode)}"><option value="">Chọn Page</option>${pages.map(page=>`<option value="${esc(page.pageId)}" ${page.pageId===p?'selected':''}>${esc(page.name)}</option>`).join('')}</select><select data-row="${args(item.id)}" data-field="pageTypeId" aria-label="Loại Page ${esc(item.contentCode)}"><option value="">Chọn loại</option>${types.map(type=>`<option value="${esc(type.typeId)}" ${type.typeId===typeId?'selected':''}>${esc(type.name)}</option>`).join('')}</select><small>${esc(label?label+(p?'':' · Chọn Page trong nhóm'):'Chưa chọn Page / loại')}</small>`;
+}
+function profileSourcePageTypes(item,reg=registry()){
+  const evidence=item.source?.companyPage;
+  if(!evidence?.pageType)return [];
+  const tokens=C.splitPageTypeLabels(evidence.pageType),groups=tokens.map(token=>profilePageTypeMatches(token,reg));
+  return groups.every(types=>types.length===1&&types[0].isActive)?[...new Map(groups.map(types=>[types[0].typeId,types[0]])).values()]:[];
+}
 function manualPage(o,reg,companyPage){
   const page=reg.pages.find(page=>page.pageId===o.pageId&&page.isActive);
   if(!page)return null;
   const typeIds=C.registryPageTypeIds(page).filter(id=>reg.pageTypes.some(type=>type.typeId===id&&type.isActive));
   let type=reg.pageTypes.find(type=>type.typeId===o.pageTypeId&&type.isActive&&typeIds.includes(type.typeId));
+  if(profilePageRoutingEnabled()&&o.pageTypeId&&!type)return null;
   if(!type&&o.pageTypeId===undefined&&companyPage?.pageType){
     const resolution=C.resolveRegistryPage(reg,{pageId:page.pageId,pageType:companyPage.pageType});
     if(resolution.selection)type=reg.pageTypes.find(type=>type.typeId===resolution.selection.pageTypeId);
@@ -9539,7 +9572,7 @@ function selfCheck(){return[{name:'8B khác mã thường',pass:!C.reportCodesMa
 function folded(title,body,open=false,extra=''){return `<details class="fold ${extra}" ${open?'open':''}><summary>${title}</summary>${body}</details>`;}
 function simpleBar(title,actions='',sub=''){return `<div class="simple-bar"><div><h2>${title}</h2>${sub?`<small>${sub}</small>`:''}</div><div class="actions">${actions}</div></div>`;}
 function configNav(){const current=ui.view==='settings'?ui.simpleConfig:ui.view==='studio'?'export':ui.view==='backup'?'backup':'more';return `<div class="tabs config-tabs">${[['subjects','Môn & link Ladi'],['campaign','Tên Camp & hậu tố'],['titles','Title'],['pages','Page'],['export','Mẫu xuất XLSX'],['manage','Kho & hồ sơ'],['backup','Sao lưu'],['more','Nâng cao / đối chiếu']].map(([v,l])=>btn('simple-config',l,{tab:v},current===v?'active':'')).join('')}</div>`;}
-function pageControl(item){const reg=registry(),o=item.override,p=o.pageId??item.pageSelection?.pageId??'',all=reg.pages.filter(x=>x.isActive),selected=all.find(x=>x.pageId===p),tids=selected?C.registryPageTypeIds(selected):[],types=reg.pageTypes.filter(t=>t.isActive&&tids.includes(t.typeId));return `${all.length>8?`<input type="search" placeholder="Tìm Page…" aria-label="Tìm Page" data-page-search="${args(item.id)}">`:''}<select data-row="${args(item.id)}" data-field="pageId" aria-label="Page ${esc(item.contentCode)}"><option value="">Chọn Page</option>${all.map(x=>`<option value="${esc(x.pageId)}" ${x.pageId===p?'selected':''}>${esc(x.name)}</option>`).join('')}</select>${types.length>1?select('work',['overrides',item.id,'pageTypeId'],o.pageTypeId??item.pageSelection?.pageTypeId??'',[['','Chọn loại'],...types.map(t=>[t.typeId,t.name])]):''}<small>${esc(item.pageSelection?.pageTypeName||item.pageSelection?.pageTypeCode||'Chưa chọn Page / loại')}</small>`;}
+function pageControl(item){if(profilePageRoutingEnabled())return profilePageControl(item);const reg=registry(),o=item.override,p=o.pageId??item.pageSelection?.pageId??'',all=reg.pages.filter(x=>x.isActive),selected=all.find(x=>x.pageId===p),tids=selected?C.registryPageTypeIds(selected):[],types=reg.pageTypes.filter(t=>t.isActive&&tids.includes(t.typeId));return `${all.length>8?`<input type="search" placeholder="Tìm Page…" aria-label="Tìm Page" data-page-search="${args(item.id)}">`:''}<select data-row="${args(item.id)}" data-field="pageId" aria-label="Page ${esc(item.contentCode)}"><option value="">Chọn Page</option>${all.map(x=>`<option value="${esc(x.pageId)}" ${x.pageId===p?'selected':''}>${esc(x.name)}</option>`).join('')}</select>${types.length>1?select('work',['overrides',item.id,'pageTypeId'],o.pageTypeId??item.pageSelection?.pageTypeId??'',[['','Chọn loại'],...types.map(t=>[t.typeId,t.name])]):''}<small>${esc(item.pageSelection?.pageTypeName||item.pageSelection?.pageTypeCode||'Chưa chọn Page / loại')}</small>`;}
 
 // ==================== BĂNG CHUYỀN NẠP MÃ + KHUNG XƯƠNG 5 Ô + UNDO/REDO (CMD+Z) ====================
 const undoStacks=new Map(),redoStacks=new Map();
@@ -10239,7 +10272,7 @@ function mergeConfigDelta(current,before,after){
  }
  return clone(current);
 }
-const PAGE_SETUP_VERSION='my-huyen-pages-20261117-r1';
+const PAGE_SETUP_VERSION='my-huyen-pages-20261119-r2';
 function mergePageRegistry(current,standard){
  const old=clone(current||{pages:[],pageTypes:[]}),src=clone(standard),knownRegistries=SEED.users.flatMap(u=>Object.values(u.registries||{})),knownPageIds=new Set(knownRegistries.flatMap(r=>(r.pages||[]).map(p=>p.pageId))),knownTypeIds=new Set(knownRegistries.flatMap(r=>(r.pageTypes||[]).map(t=>t.typeId))),aliases=x=>[...new Set((x||[]).filter(Boolean))],norm=x=>canon(x).replace(/\s+/g,' ');
  const remap=new Map(),claimed=new Set(),types=[];
@@ -10513,6 +10546,11 @@ document.addEventListener('change',e=>safely(async()=>{const el=e.target;if(el.d
   if(typeIds.includes(previousType))o.pageTypeId=previousType;
   else if(typeIds.length===1)o.pageTypeId=typeIds[0];
   else delete o.pageTypeId;
+}else if(el.dataset.field==='pageTypeId'&&profilePageRoutingEnabled()){
+  const item=compute().find(item=>item.id===rid),page=registry().pages.find(page=>page.pageId===(o.pageId??item?.pageSelection?.pageId));
+  o.pageTypeId=el.value;
+  if(!page||!C.registryPageTypeIds(page).includes(el.value))o.pageId='';
+  else o.pageId=page.pageId;
 }else o[el.dataset.field]=el.value;
 save();refreshDailyTableOnly();return;}if(el.dataset.membership){const {index,type}=decode(el.dataset.membership),p=registryDraft().pages[index],types=new Set(C.registryPageTypeIds(p));el.checked?types.add(type):types.delete(type);p.pageTypeIds=[...types];p.pageTypeId=p.pageTypeIds[0]||'';save();return;}if(el.id==='import-sheet'||el.id==='import-header'){const p=pendingImports.find(p=>p.id===modalState?.id);if(!p)return;if(el.id==='import-sheet'){p.sheet=Number(el.value);p.header=1;}else p.header=Math.max(1,Number(el.value)||1);delete p.mapping;delete p.sourceMapping;openImport(p);return;}if(el.dataset.importMap){const p=pendingImports.find(p=>p.id===modalState?.id);if(p)p.mapping[el.dataset.importMap]=Number(el.value);return;}if(el.dataset.sourceMap){const p=pendingImports.find(p=>p.id===modalState?.id);if(p)p.sourceMapping[Number(el.dataset.sourceMap)]=Number(el.value);return;}if(el.dataset.action==='choose-report-profile'){report().profile=el.value==='default'?C.defaultReportProfile(db.session.channel==='CD'?'cd':'mess'):clone(report().profiles[Number(el.value)]);save();render();}}));
 function clipboardMatrix(e){const html=e.clipboardData?.getData('text/html')||'',text=e.clipboardData?.getData('text/plain')||'';if(/<table[\s>]/i.test(html)){const doc=new DOMParser().parseFromString(html,'text/html'),table=doc.querySelector('table');const rows=[...table.rows].map(tr=>[...tr.cells].map(td=>{const c=td.cloneNode(true);c.querySelectorAll('br').forEach(br=>br.replaceWith('\n'));c.querySelectorAll('p,div').forEach(x=>{if(x.nextSibling)x.append('\n');});return c.textContent.replace(/\r\n?/g,'\n').replace(/\u00a0/g,' ');}));if(rows.length)return rows;}return C.parseDelimitedMatrix(text,'\t');}
