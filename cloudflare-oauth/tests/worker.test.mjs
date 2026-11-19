@@ -7,8 +7,8 @@ const database=new DatabaseSync(':memory:');database.exec(readFileSync(new URL('
 const prepare=sql=>({bind(...values){return query(sql,values)},...query(sql,[])});
 function query(sql,values){return{bind(...next){return query(sql,next)},async first(){return database.prepare(sql).get(...values)||null},async run(){return database.prepare(sql).run(...values)},async all(){return{results:database.prepare(sql).all(...values)}}};}
 const env={APP_ORIGIN:ORIGIN,GOOGLE_CLIENT_ID:'fixture.apps.googleusercontent.com',GOOGLE_CLIENT_SECRET:'FIXTURE_CLIENT_SECRET',TOKEN_ENCRYPTION_KEY:Buffer.alloc(32,11).toString('base64url'),ALLOWED_USERS:JSON.stringify({ThoLD:['tho@example.invalid'],Mynnh:['my@example.invalid'],Huyenbtt:['huyen@example.invalid']}),AUTH_DB:{prepare,async batch(items){return Promise.all(items.map(x=>x.run()))}},ASSETS:{fetch:async()=>new Response('Stable app')}};
-const calls=[];let refreshError=false,resourceStatus=200,networkError=false,oversized=false,refreshDelay=0,scopeOverride=null,refreshCounter=0,redirectEndpoint='';
-const identities={tho:{email:'tho@example.invalid',sub:'sub-tho'},my:{email:'my@example.invalid',sub:'sub-my'},huyen:{email:'huyen@example.invalid',sub:'sub-huyen'},outsider:{email:'outsider@example.invalid',sub:'sub-other'}};
+const calls=[];let refreshError=false,resourceStatus=200,networkError=false,oversized=false,refreshDelay=0,scopeOverride=null,refreshCounter=0,redirectEndpoint='',identityStatus=200,identityOverride=null;
+const identities={tho:{email:'tho@example.invalid',sub:'sub-tho'},my:{email:'My@Example.Invalid',sub:'sub-my'},huyen:{email:'huyen@example.invalid',sub:'sub-huyen'},outsider:{email:'outsider@example.invalid',sub:'sub-other'}};
 globalThis.fetch=async(url,options={})=>{
  calls.push({url:String(url),options});
  // Workers throws before sending requests with the unsupported redirect:error mode.
@@ -20,7 +20,7 @@ globalThis.fetch=async(url,options={})=>{
   if(body.get('grant_type')==='authorization_code'){const who=body.get('code');assert(body.get('code_verifier'));assert.equal(body.get('redirect_uri'),ORIGIN+'/auth/callback');return Response.json({access_token:'FIXTURE_ACCESS_'+who,refresh_token:'FIXTURE_REFRESH_'+who,expires_in:3600,scope:scopeOverride||'openid email '+S+' '+D});}
   refreshCounter++;if(refreshDelay)await new Promise(r=>setTimeout(r,refreshDelay));if(refreshError)return Response.json({error:'invalid_grant'},{status:400});return Response.json({access_token:'FIXTURE_FRESH_'+refreshCounter,refresh_token:'FIXTURE_ROTATED_'+refreshCounter,expires_in:3600});
  }
- if(String(url)==='https://openidconnect.googleapis.com/v1/userinfo'){const who=options.headers.Authorization.replace('Bearer FIXTURE_ACCESS_','');return Response.json({...identities[who],email_verified:true});}
+ if(String(url)==='https://openidconnect.googleapis.com/v1/userinfo'){const who=options.headers.Authorization.replace('Bearer FIXTURE_ACCESS_','');return Response.json(identityOverride||{...identities[who],email_verified:true},{status:identityStatus});}
  if(String(url)==='https://oauth2.googleapis.com/revoke')return new Response(null,{status:200});
  assert(/^https:\/\/(sheets.googleapis.com|www.googleapis.com)\//.test(String(url)),'no arbitrary outbound target');assert(options.headers.Authorization.startsWith('Bearer FIXTURE_'));assert.equal(options.method,'GET');
  if(oversized)return new Response('oversized',{headers:{'Content-Length':String(21*1024*1024)}});
@@ -54,6 +54,27 @@ assert.equal((await dispatch('/auth/start?profile=ThoLD',{extra:{'Sec-Fetch-Site
 const invalidFlow=await begin('ThoLD');assert.equal((await dispatch('/auth/callback?state='+invalidFlow.state+'&code=tho')).status,400,'callback needs the matching browser cookie');
 const bad=await login('ThoLD','outsider');assert((await bad.res.text()).includes('không được cấp'));assert.equal(database.prepare('SELECT COUNT(*) AS n FROM app_sessions').get().n,0);
 const denied=await begin('ThoLD');const deniedResponse=await dispatch('/auth/callback?state='+denied.state+'&error=access_denied',{jar:denied.jar});assert((await deniedResponse.text()).includes('Chưa cấp quyền'));
+// Distinct callback diagnostics must preserve the same fail-closed authorization.
+for(const [status,identity,code] of [
+ [403,{error:'FIXTURE_PROVIDER_PRIVATE'},'GOOGLE_IDENTITY_FAILED'],
+ [503,{error:'FIXTURE_PROVIDER_PRIVATE'},'GOOGLE_IDENTITY_FAILED'],
+ [200,{email:'alias@example.invalid',email_verified:true},'GOOGLE_IDENTITY_INCOMPLETE'],
+ [200,{sub:'fixture-sub',email_verified:true},'GOOGLE_IDENTITY_INCOMPLETE'],
+ [200,{email:'my@example.invalid',sub:'fixture-sub',email_verified:false},'GOOGLE_EMAIL_UNVERIFIED'],
+ [200,{email:'alias@example.invalid',sub:'fixture-sub',email_verified:true},'PROFILE_EMAIL_DENIED']
+]){
+ database.exec('DELETE FROM oauth_rate_limits');identityStatus=status;identityOverride=identity;
+ const attempt=await login('Mynnh','my'),body=await attempt.res.text();
+ assert(body.includes('['+code+']'),code);
+ assert(!/FIXTURE_PROVIDER_PRIVATE|FIXTURE_ACCESS|FIXTURE_REFRESH|FIXTURE_CLIENT_SECRET|fixture-sub|tho@example.invalid|huyen@example.invalid/.test(body),'never disclose provider bodies, tokens, account IDs or other allowlisted emails');
+ if(code==='PROFILE_EMAIL_DENIED'){assert(body.includes('alias@example.invalid'));assert(body.includes('Mynnh'));}
+ else assert(!body.includes('@example.invalid'),'do not disclose unverified identity fields');
+ assert.equal(database.prepare('SELECT COUNT(*) AS n FROM app_sessions').get().n,0,'failed identity never creates a session');
+ assert.equal(database.prepare('SELECT COUNT(*) AS n FROM google_connections').get().n,0,'failed identity never stores a grant');
+ assert.equal((await dispatch('/auth/callback?state='+attempt.state+'&code=my',{jar:attempt.jar})).status,400,'diagnostic failures still consume state');
+}
+identityStatus=200;identityOverride=null;database.exec('DELETE FROM oauth_rate_limits');
+console.log('PASS callback separates provider failure, incomplete identity, unverified email and profile email denial without widening access or leaking credentials');
 const first=await login('ThoLD','tho'),my=await login('Mynnh','my'),hu=await login('Huyenbtt','huyen');
 const firstBody=await first.res.text();assert(!/FIXTURE_ACCESS|FIXTURE_REFRESH|FIXTURE_CLIENT_SECRET/.test(firstBody));assert(first.res.headers.getSetCookie().some(x=>x.includes('HttpOnly')&&x.includes('Secure')&&x.includes('SameSite=Strict')));
 assert.equal((await dispatch('/auth/callback?state='+first.state+'&code=tho',{jar:first.jar})).status,400,'state consumed atomically');
@@ -99,4 +120,5 @@ res=await dispatch('/auth/disconnect?profile=Mynnh',{jar:my.jar,method:'POST',bo
 console.log('PASS no refresh on forbidden file; network/oversize errors; revoked grant invalidates only affected account; explicit disconnect leaves other accounts working');
 assert(!calls.some(x=>!/^https:\/\/(accounts.google.com|oauth2.googleapis.com|openidconnect.googleapis.com|sheets.googleapis.com|www.googleapis.com)\//.test(x.url)));
 console.log('ALL BACKEND TESTS PASS (mock Google endpoints; in-memory SQLite; no real credentials or source files accessed)');
+
 

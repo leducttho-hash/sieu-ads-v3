@@ -75,8 +75,11 @@ async function callback(req,env,cfg,url){
  const response=await googleFetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET,code,code_verifier:verifier,redirect_uri:cfg.origin+'/auth/callback',grant_type:'authorization_code'})});
  const tokens=await providerJson(response);if(!response.ok||!tokens.access_token)return popup(cfg,flow.profile,false,'Google chưa hoàn tất kết nối. Bấm Kết nối Google để thử lại.',Object.fromEntries(headers));
  const identityResponse=await googleFetch('https://openidconnect.googleapis.com/v1/userinfo',{headers:{Authorization:'Bearer '+tokens.access_token}}),identity=await providerJson(identityResponse);
+ if(!identityResponse.ok)return popup(cfg,flow.profile,false,'[GOOGLE_IDENTITY_FAILED] Google chưa trả được thông tin tài khoản (HTTP '+identityResponse.status+'). Thử kết nối lại; quyền hồ sơ chưa được thay đổi.',Object.fromEntries(headers));
  const email=String(identity.email||'').toLowerCase(),sub=String(identity.sub||'');
- if(!identityResponse.ok||identity.email_verified!==true||!sub||!cfg.users[flow.profile].some(x=>x.toLowerCase()===email))return popup(cfg,flow.profile,false,'Email Google không được cấp cho hồ sơ này. Chọn lại đúng tài khoản.',Object.fromEntries(headers));
+ if(!email||!sub)return popup(cfg,flow.profile,false,'[GOOGLE_IDENTITY_INCOMPLETE] Google chưa trả đủ email hoặc mã tài khoản. Thử kết nối lại bằng tài khoản Google chính.',Object.fromEntries(headers));
+ if(identity.email_verified!==true)return popup(cfg,flow.profile,false,'[GOOGLE_EMAIL_UNVERIFIED] Google chưa xác nhận email của tài khoản này. Kiểm tra tài khoản Google đã chọn.',Object.fromEntries(headers));
+ if(!cfg.users[flow.profile].some(x=>x.toLowerCase()===email))return popup(cfg,flow.profile,false,'[PROFILE_EMAIL_DENIED] Email Google '+email+' không được cấp cho hồ sơ '+flow.profile+'. Chọn đúng hồ sơ và tài khoản; quản trị viên kiểm tra ALLOWED_USERS của bản đang dùng.',Object.fromEntries(headers));
  const scopes=new Set(String(tokens.scope||'').split(/\s+/));if(!scopes.has(SHEETS)||(flow.wants_drive&&!scopes.has(DRIVE)))return popup(cfg,flow.profile,false,'Chưa cấp đủ quyền chỉ đọc cho loại nguồn đã chọn.',Object.fromEntries(headers));
  const prior=await env.AUTH_DB.prepare('SELECT * FROM google_connections WHERE profile=? AND google_sub=?').bind(flow.profile,sub).first();
  const previous=prior?await open(cfg,prior.token_cipher,aad(flow.profile,sub)):{};
@@ -155,4 +158,5 @@ export default {async fetch(req,env){const url=new URL(req.url);if(!url.pathname
   fail(405,'METHOD_DENIED','Thao tác chưa được hỗ trợ.');
  }catch(error){if(error instanceof SafeError)return json({ok:false,error:error.code,message:error.message},error.status);return json({ok:false,error:'BACKEND_ERROR',message:'Backend chưa xử lý được yêu cầu. Catalog cũ được giữ.'},503);}
 }};
+
 
