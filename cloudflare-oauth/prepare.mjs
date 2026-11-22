@@ -37,7 +37,7 @@ crmReplace('<div class="report-inputs">','<div id="crm-api-report-inputs" class=
 crmReplace("a=C.parseDelimitedMatrix(r.crmPaste,'\\t');if(!a.length)return[];", "a=C.parseDelimitedMatrix(crmApiInputText(r),'\\t');if(!a.length)return[];");
 crmReplace('function switchScope(type,value){sheetScopeEpoch++;', 'function switchScope(type,value){crmApiInvalidate();sheetScopeEpoch++;');
 crmReplace("document.addEventListener('click',e=>{if(!e.target.closest('details.inline-menu'))", crmAddon+"\ndocument.addEventListener('click',e=>{if(!e.target.closest('details.inline-menu'))");
-crmReplace('</head>','<link rel="stylesheet" href="/crm-api-panel.css?v=range-v3"></head>');
+crmReplace('</head>','<link rel="stylesheet" href="/crm-api-panel.css?v=personnel-v2"></head>');
 await rm(out,{recursive:true,force:true});await mkdir(out,{recursive:true});
 await writeFile(resolve(out,'index.html'),html);
 await copyFile(resolve(here,'backend-client.js'),resolve(out,'backend-client.js'));

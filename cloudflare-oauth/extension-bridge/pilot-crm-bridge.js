@@ -6,6 +6,7 @@
   const CD = ['numberOfContacts','numberOfProcessContacts','numberOfOrders','initTurnOver','successTurnOver'];
   const MESS = ['conversation_count','phone_conversion_count','init_order_count','success_order_count','init_revenue','success_revenue'];
   let busy = false;
+  const DIRECTORY_KEY='pilotCrmDirectoryV2';
   function check(ok, message) { if (!ok) throw new Error(message); }
   function int(v, field) {
     check((typeof v === 'number' || typeof v === 'string') && /^\d+$/.test(String(v)), 'CRM thiếu hoặc sai ' + field + '.');
@@ -45,6 +46,48 @@
   }
   function sums(rows, fields) { const out=Object.fromEntries(fields.map(k=>[k,0])); for (const r of rows) for(const k of fields) {out[k]+=int(r[k],k);check(Number.isSafeInteger(out[k]),'Tổng CRM vượt giới hạn.');} return out; }
   function reconcile(rows, total, fields) { const got=sums(rows,fields); for(const k of fields) check(got[k] === int(total?.[k],k), 'Tổng chi tiết CRM không khớp '+k+'. Bấm Lấy CRM để thử lại.'); return got; }
+  function personKey(v){return String(v||'').normalize('NFD').replace(/\p{M}/gu,'').replace(/[đĐ]/g,'d').trim().toLowerCase();}
+  function personId(v){const id=int(v,'ID nhân sự');check(id>0,'ID nhân sự không hợp lệ.');return id;}
+  function cleanPerson(p){return {id:personId(p.id),crmName:text(p.fullName||p.crmName||p.userName,'Tên CRM').slice(0,200),userName:typeof p.userName==='string'?p.userName.trim().slice(0,200):''};}
+  async function directory(session){const data=await chrome.storage.local.get(DIRECTORY_KEY),cache=data[DIRECTORY_KEY];const out=new Map();if(cache?.sessionKey===session.sessionKey&&Array.isArray(cache.people))for(const p of cache.people){const row=cleanPerson(p);out.set(row.id,row);}return out;}
+  async function roster(m,session,out){
+    const lists=await Promise.all([SCHOOL_LEVEL_THCS,SCHOOL_LEVEL_TIEU_HOC].map(async level=>{
+      const q=new URLSearchParams();q.append('createdAt[]',m.startDate);q.append('createdAt[]',m.endDate);q.set('schoolLevelId',String(level));
+      const j=await json(CRM_CD_API_BASE+'?'+q,session.token);check(Array.isArray(j.data.marketerData),'CRM thiếu danh sách nhân sự.');return j.data.marketerData;
+    }));
+    for(const list of lists)for(const row of list){const p=cleanPerson(row);out.set(p.id,p);}
+  }
+  function broadRange(){const endDate=getVnYmdOffset(0),d=new Date(endDate+'T00:00:00Z');d.setUTCDate(d.getUTCDate()-365);return {startDate:d.toISOString().slice(0,10),endDate};}
+  async function verifiedDirectory(m,session,satisfied){
+    const out=await directory(session);await roster(m,session,out);
+    if(!satisfied(out)){const broad=broadRange();if(broad.startDate!==m.startDate||broad.endDate!==m.endDate)await roster(broad,session,out);}
+    return out;
+  }
+  async function rememberDirectory(session,out){
+    const current=await contentScaleReadSession();check(current.sessionKey===session.sessionKey,'Phiên CRM đã đổi. Tìm lại nhân sự trong phiên hiện tại.');
+    await chrome.storage.local.set({[DIRECTORY_KEY]:{sessionKey:session.sessionKey,people:[...out.values()]}});
+  }
+  async function personnelSearch(m,session){
+    const query=personKey(text(m.query,'Tên hoặc ID CRM'));check(query.length>=2||/^\d+$/.test(query),'Nhập ít nhất 2 ký tự hoặc ID CRM.');check(query.length<=200,'Tên tìm kiếm quá dài.');
+    const matches=p=>String(p.id)===query||personKey(p.crmName).includes(query)||personKey(p.userName).includes(query);
+    const people=await verifiedDirectory(m,session,out=>[...out.values()].some(matches));await rememberDirectory(session,people);
+    const found=[...people.values()].filter(matches).sort((a,b)=>a.crmName.localeCompare(b.crmName,'vi')||a.id-b.id);
+    return {ok:true,personnelVersion:2,people:found.slice(0,50),total:found.length};
+  }
+  async function personnelIds(ids,m,session){
+    check(Array.isArray(ids)&&ids.length>0&&ids.length<=20,'Chọn từ 1 đến 20 nhân sự CRM.');const wanted=ids.map(personId);check(new Set(wanted).size===wanted.length,'Nhân sự CRM bị trùng ID.');
+    let people=await directory(session);
+    if(!wanted.every(id=>people.has(id)))people=await verifiedDirectory(m,session,out=>wanted.every(id=>out.has(id)));
+    check(wanted.every(id=>people.has(id)),'Có nhân sự chưa được xác minh trong phiên CRM này. Mở Nhân sự và tìm lại.');
+    return {users:wanted.map(id=>people.get(id)),people};
+  }
+  async function personnelNames(names,m,session){
+    check(Array.isArray(names)&&names.length>0&&names.length<=20,'Chọn từ 1 đến 20 nhân sự CRM.');const clean=names.map(n=>text(n,'Tên CRM'));
+    const matches=(out,name)=>[...out.values()].filter(p=>normalizeKey(p.crmName)===normalizeKey(name)||normalizeKey(p.userName)===normalizeKey(name)||String(p.id)===name);
+    const people=await verifiedDirectory(m,session,out=>clean.every(name=>matches(out,name).length>0));
+    const users=clean.map(name=>{const found=matches(people,name);check(found.length===1,found.length?'Tên CRM bị trùng. Dùng ô tìm kiếm để chọn đúng ID.':'Không tìm thấy nhân sự CRM đã chọn. Tìm lại theo tên hoặc ID.');return found[0];});
+    await rememberDirectory(session,people);return {ok:true,personnelVersion:2,users};
+  }
   async function resolvedNames(mappings, m, session) {
     const cacheKey='pilotCrmIdentityV1', data=await chrome.storage.local.get(cacheKey), cached=data[cacheKey];
     let users;
@@ -131,23 +174,30 @@
   async function handle(message, sender) {
     const url=new URL(sender?.url || 'about:blank');
     check(url.origin===ORIGIN && (sender.origin===undefined || sender.origin===ORIGIN) && (sender.frameId===undefined || sender.frameId===0),'Trang không được phép kết nối CRM.');
-    check(message?.type===TYPE && ['CONFIG','FETCH'].includes(message.op),'Thao tác CRM không hợp lệ.');
+    check(message?.type===TYPE && ['CONFIG','FETCH','SEARCH_PERSONNEL','RESOLVE_PERSONNEL'].includes(message.op),'Thao tác CRM không hợp lệ.');
     const allowed=await savedMappings();
-    if(message.op==='CONFIG')return {ok:true,version:1,mappings:allowed};
+    if(message.op==='CONFIG')return {ok:true,version:2,capabilities:{personnel:true},mappings:allowed};
     range(message);check(['CD','MESS'].includes(message.channel),'Kênh CRM không hợp lệ.');
     check(typeof message.profile==='string' && /^[\w-]{1,64}$/.test(message.profile),'Hồ sơ CRM không hợp lệ.');
-    check(Array.isArray(message.names) && message.names.length>0 && message.names.length<=20,'Chọn nhân sự CRM.');
-    const requested=new Set(message.names.map(x=>normalizeKey(text(x,'Tên CRM'))));
-    const mappings=allowed.filter(x=>requested.has(normalizeKey(x.crmName)));
-    check(mappings.length===requested.size,'Nhân sự chưa được lưu trong Cài đặt Extension CRM trên máy này.');
+    let mappings;
+    if(message.op==='FETCH'&&message.personIds===undefined){
+      check(Array.isArray(message.names) && message.names.length>0 && message.names.length<=20,'Chọn nhân sự CRM.');
+      const requested=new Set(message.names.map(x=>normalizeKey(text(x,'Tên CRM'))));mappings=allowed.filter(x=>requested.has(normalizeKey(x.crmName)));
+      check(mappings.length===requested.size,'Nhân sự chưa được lưu trong Cài đặt Extension CRM trên máy này.');
+    }
     check(!busy,'Một lần lấy CRM đang chạy. Đợi hoàn tất rồi thử lại.');busy=true;
     try {
-      const session=await contentScaleReadSession(), users=await resolvedNames(mappings,message,session);
+      const session=await contentScaleReadSession();
+      if(message.op==='SEARCH_PERSONNEL')return await personnelSearch(message,session);
+      if(message.op==='RESOLVE_PERSONNEL')return await personnelNames(message.names,message,session);
+      let verified;
+      const users=message.personIds!==undefined?(verified=await personnelIds(message.personIds,message,session)).users:await resolvedNames(mappings,message,session);
       const result=message.channel==='CD'?await cd(message,users,session):await mess(message,users,session);
       const current=await contentScaleReadSession();check(current.sessionKey===session.sessionKey,'Phiên CRM đã đổi. Chưa dùng kết quả; bấm Lấy CRM lại.');
+      if(verified)await rememberDirectory(session,verified.people);
       const people={}; for(const u of users) people[normalizeKey(u.crmName)]=u.id;
       await chrome.storage.local.set({pilotCrmIdentityV1:{sessionKey:session.sessionKey,people}});
-      return {ok:true,profile:message.profile,channel:message.channel,startDate:message.startDate,endDate:message.endDate,users:users.map(u=>({id:u.id,crmName:u.crmName})),loadedAt:new Date().toISOString(),...result};
+      return {ok:true,personnelVersion:2,profile:message.profile,channel:message.channel,startDate:message.startDate,endDate:message.endDate,users:users.map(u=>({id:u.id,crmName:u.crmName,userName:u.userName||''})),loadedAt:new Date().toISOString(),...result};
     } finally {busy=false;}
   }
   chrome.runtime.onMessageExternal.addListener((message,sender,reply)=>{

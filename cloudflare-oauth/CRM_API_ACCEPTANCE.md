@@ -53,3 +53,9 @@ Kiểm thử không gọi CRM/Sheet thật, không ghi dữ liệu lên Sheet. C
 ## Nút kỳ báo cáo theo tuần
 
 Đổi riêng hai nút nhanh thành BC Thứ 2 (CN–T7) và BC Thứ 5 (CN–T4). Tính theo ngày Việt Nam, dùng kỳ gần nhất có ngày cuối trước hôm nay; bấm ngày khác trong tuần vẫn không chọn kỳ chưa hoàn tất. Ví dụ Thứ 2 23/11/2026 chọn 15–21/11; Thứ 5 26/11 chọn 22–25/11. Nút chỉ cập nhật khoảng ngày, không gọi API. Giữ nguyên chọn khoảng ngày thủ công, dữ liệu, công thức, UI khác và Extension.
+
+## Nhân sự Pilot v2 — Extension 3.2.14
+
+Chỉ sửa modal Nhân sự CRM, payload ID và cầu nối Pilot. Thêm tìm theo tên không dấu/username/ID, thêm/gỡ và giữ dấu tích theo hồ sơ+kênh. Tìm chỉ đọc marketerData trong phiên hiện tại, thử kỳ đang chọn rồi fallback 366 ngày gần nhất khi chưa có kết quả; không khẳng định đây là danh bạ toàn tổ chức. Chặn tên trùng khi nâng cấp cấu hình tên cũ; người dùng chọn ID cụ thể qua kết quả tìm. Giữ đường đọc tên cũ nếu chưa nâng cấp cấu hình. Không sửa mapping CRM→Sheet, các file runtime cũ, root index, ghép mã, OAuth, DB hay các luồng khác.
+
+ID mới phải được xác minh từ dữ liệu CRM của cùng phiên. Thử ID lạ, trùng ID, đổi phiên, phản hồi tìm đến muộn, bỏ tích hết, hủy modal và tải lại cấu hình. MESS giữ endpoint /report/rows, đủ trang và đối chiếu tổng như trước.

@@ -49,3 +49,17 @@
 #crm-api-range-popup .crm-range-footer > span {margin-right:auto;font-size:11px}
 #crm-api-range-popup .crm-range-footer .btn {font-size:12px;min-height:29px;padding:5px 10px}
 @media(max-width:460px){#crm-api-range-popup .crm-range-calendars {grid-template-columns:1fr;gap:10px}#crm-api-range-popup .crm-range-month+.crm-range-month {border-top:1px solid var(--border,#e2e8f0);padding-top:6px}}
+
+#crm-api-people {display:grid;gap:10px;min-width:0}
+#crm-api-people .crm-api-people-search {display:flex;gap:8px;align-items:center}
+#crm-api-people .crm-api-people-search input {flex:1;min-width:0}
+#crm-api-people [role=status] {font-size:12px;overflow-wrap:anywhere;color:var(--muted,#64748b);min-height:16px}
+#crm-api-person-list,#crm-api-person-results {max-height:260px;overflow:auto;display:grid;gap:8px}
+#crm-api-person-results:not(:empty) {padding-bottom:10px;border-bottom:1px solid var(--border,#dfe4ec)}
+#crm-api-people .crm-api-person-row {display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid var(--border,#dfe4ec);border-radius:8px;min-width:0}
+#crm-api-people .crm-api-person-row label {display:flex;align-items:center;gap:9px;min-width:0;flex:1;cursor:pointer}
+#crm-api-people .crm-api-person-row input[type=checkbox] {width:17px;height:17px;flex:0 0 auto}
+#crm-api-people .crm-api-person-row span {min-width:0;overflow-wrap:anywhere;font-size:13px}
+#crm-api-people .crm-api-person-row small {display:block;font-size:11px;color:var(--muted,#64748b);margin-top:3px}
+#crm-api-people .crm-api-person-row .btn {flex:0 0 auto;min-height:28px;padding:4px 9px;font-size:12px}
+#crm-api-people .crm-api-people-empty {font-size:12px;color:var(--muted,#64748b)}

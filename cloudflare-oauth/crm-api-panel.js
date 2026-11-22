@@ -3,11 +3,12 @@ const CRM_BRIDGE_ID='mopcgklafblfklmngbhccfonefidcajf';
 const CRM_BRIDGE_TYPE='SIEUADS_PILOT_CRM_V1';
 let crmApiEpoch=0;
 let crmApiRangeDraft=null;
+let crmApiPeopleDraft=null;
 const crmApiPending=new Map();
 function crmApiScope(){return JSON.stringify([user().id,wh().id,db.session.channel]);}
 function crmApiState(){const r=report();r.crmApiInputsV1??={};const sk=crmApiScope();return r.crmApiInputsV1[sk]??={source:'manual',startDate:'',endDate:'',cache:null};}
 function crmApiConfig(){db.crmApiProfilesV1??={};const k=JSON.stringify([user().id,db.session.channel]);return db.crmApiProfilesV1[k]??={names:[],resolved:[]};}
-function crmApiSignature(s=crmApiState(),c=crmApiConfig()){return JSON.stringify([crmApiScope(),s.startDate,s.endDate,[...c.names].sort()]);}
+function crmApiSignature(s=crmApiState(),c=crmApiConfig()){const who=Array.isArray(c.people)?['ids',...c.people.filter(p=>p.selected).map(p=>Number(p.id)).sort((a,b)=>a-b)]:[...c.names].sort();return JSON.stringify([crmApiScope(),s.startDate,s.endDate,who]);}
 function crmApiReady(){const s=crmApiState();return s.source!=='api'||!!s.cache&&s.cache.signature===crmApiSignature()&&!s.error&&!crmApiPending.has(crmApiScope());}
 function crmApiInputText(r){const s=crmApiState();return s.source==='api'?(s.cache?.tsv||''):r.crmPaste;}
 function crmApiInvalidate(){crmApiEpoch++;crmApiRangeClose();}
@@ -75,18 +76,51 @@ function crmApiSourceCard(d){
   `<button type="button" class="crm-api-range-trigger" data-action="crm-api-open-range" aria-haspopup="dialog" aria-label="Chọn khoảng ngày CRM"><span>▦</span><span>${s.startDate&&s.endDate?crmApiDateLabel(s.startDate)+' – '+crmApiDateLabel(s.endDate):'Chọn khoảng ngày'}</span><span>▾</span></button><div class="crm-api-actions">${btn('crm-api-period','BC Thứ 2',{period:'monday'})}${btn('crm-api-period','BC Thứ 5',{period:'thursday'})}<button type="button" class="btn primary" data-action="crm-api-load" ${busy?'disabled':''}>${busy?'Đang lấy…':'Lấy CRM'}</button></div><div class="crm-api-status ${s.error?'crm-api-error':''}" role="status" aria-live="polite">${esc(busy?'Đang lấy toàn bộ dữ liệu…':s.error||(!c.names.length?'Chọn nhân sự tại ⚙.':s.cache?((crmApiReady()?'Đã lấy ':'Cần lấy lại · ')+s.cache.totalRows+'/'+s.cache.totalRows+' dòng · '+crmApiDateLabel(s.cache.startDate)+'–'+crmApiDateLabel(s.cache.endDate)):'Chọn khoảng ngày rồi bấm Lấy CRM.'))}</div>${crmApiPreview(d)}${s.cache?`<details class="crm-api-details"><summary>${esc(c.names.join(' · '))} · ${esc(new Date(s.cache.loadedAt).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'}))}</summary><small>${s.cache.pages} lượt dữ liệu · ${s.cache.totalRows} dòng đã đối chiếu tổng</small></details>`:''}`;
   return card('2. Nguồn CRM',`<section id="crm-api-panel" data-crm-ui="range-v3">${controls}${body}</section>`,`<span class="count-pill">${d.crm.length} mã</span>`).replace('<section class="card">','<section id="crm-api-source-card" class="card crm-api-card">');
 }
+function crmApiPeopleContext(){const s=crmApiState();return {profile:user().id,channel:db.session.channel,startDate:s.startDate||crmApiShiftDay(crmApiToday(),-30),endDate:s.endDate||crmApiShiftDay(crmApiToday(),-1)};}
+function crmApiPeopleCurrent(d){return !!d&&d===crmApiPeopleDraft&&d.scope===crmApiScope()&&document.querySelector('#modal')?.open&&document.querySelector('#crm-api-people')?.dataset.token===d.token;}
+function crmApiPeopleRow(p){const id=Number(p.id);if(!Number.isSafeInteger(id)||id<=0||typeof p.crmName!=='string'||!p.crmName.trim())throw Error('CRM trả nhân sự không hợp lệ.');return {id,crmName:p.crmName.trim(),userName:String(p.userName||'').trim(),selected:p.selected!==false};}
+function crmApiPeopleRender(){
+  const d=crmApiPeopleDraft;if(!d||!crmApiPeopleCurrent(d))return;const box=document.querySelector('#crm-api-people');
+  box.querySelector('#crm-api-person-list').innerHTML=d.people.map((p,i)=>`<div class="crm-api-person-row"><label><input type="checkbox" data-crm-api-person="${i}" ${p.selected?'checked':''} ${d.busy?'disabled':''}><span><b>${esc(p.crmName)}</b><small>${esc([p.userName,p.id?'ID '+p.id:'Chưa xác minh ID'].filter(Boolean).join(' · '))}</small></span></label>${btn('crm-api-person-remove','×',{index:i})}</div>`).join('')||'<p class="crm-api-people-empty">Chưa có nhân sự. Tìm tên hoặc ID để thêm.</p>';
+  box.querySelector('#crm-api-person-results').innerHTML=d.results.map((p,i)=>`<div class="crm-api-person-row"><span><b>${esc(p.crmName)}</b><small>${esc([p.userName,'ID '+p.id].filter(Boolean).join(' · '))}</small></span>${d.people.some(x=>x.id===p.id)?'<small>Đã thêm</small>':btn('crm-api-person-add','+ Thêm',{index:i})}</div>`).join('');
+  box.querySelector('[role="status"]').textContent=d.status||'';
+  box.querySelector('[data-action="crm-api-person-search"]').disabled=d.busy;
+  document.querySelector('#modal [data-action="crm-api-save-config"]').disabled=d.busy;
+}
 async function crmApiOpenConfig(){
   const scope=crmApiScope(),epoch=crmApiEpoch,res=await crmApiSend('CONFIG');if(scope!==crmApiScope()||epoch!==crmApiEpoch)return;
-  const c=crmApiConfig(),options=res.mappings;
-  if(!Array.isArray(options)||!options.length)throw Error('Lưu tên CRM trong Cài đặt Extension trước.');
-  openModal('Nhân sự CRM',`<div id="crm-api-person-list">${options.map((m,i)=>`<label class="check-pill"><input type="checkbox" data-crm-api-person value="${esc(m.crmName)}" ${c.names.includes(m.crmName)?'checked':''}>${esc(m.crmName)}${m.sheetTab?` · ${esc(m.sheetTab)}`:''}</label>`).join('')}</div>`,btn('crm-api-save-config','Lưu',{},'primary'));
-  document.querySelector('#crm-api-person-list').dataset.scope=scope;
+  const c=crmApiConfig(),options=Array.isArray(res.mappings)?res.mappings:[];
+  if(!res.capabilities?.personnel){
+    if(Array.isArray(c.people))throw Error('Cập nhật Extension CRM 3.2.14 rồi tải lại Pilot.');
+    openModal('Nhân sự CRM',`<p>Cập nhật Extension 3.2.14 để tìm và thêm nhân sự.</p><div id="crm-api-person-list">${options.map(m=>`<label class="check-pill"><input type="checkbox" data-crm-api-person value="${esc(m.crmName)}" ${c.names.includes(m.crmName)?'checked':''}>${esc(m.crmName)}</label>`).join('')}</div>`,btn('crm-api-save-config','Lưu',{},'primary'));
+    document.querySelector('#crm-api-person-list').dataset.scope=scope;crmApiPeopleDraft=null;return;
+  }
+  const people=Array.isArray(c.people)?c.people.map(crmApiPeopleRow):[...new Set([...c.names,...options.map(m=>m.crmName)])].map(name=>{const resolved=c.resolved?.find(p=>p.crmName===name);return {id:resolved?.id||null,crmName:name,userName:resolved?.userName||'',selected:c.names.includes(name)};});
+  const d=crmApiPeopleDraft={scope,token:String(++crmApiEpoch),people,results:[],busy:false,status:'',context:crmApiPeopleContext()};
+  openModal('Nhân sự CRM',`<section id="crm-api-people" data-token="${d.token}"><div class="crm-api-people-search"><input type="search" data-crm-api-person-search placeholder="Tên hoặc ID CRM" aria-label="Tìm nhân sự CRM">${btn('crm-api-person-search','Tìm CRM')}</div><div role="status" aria-live="polite"></div><div id="crm-api-person-results"></div><div id="crm-api-person-list"></div></section>`,btn('crm-api-save-config','Lưu',{},'primary'));crmApiPeopleRender();
 }
-function crmApiSaveConfig(){
-  const box=document.querySelector('#crm-api-person-list');if(!box||box.dataset.scope!==crmApiScope())throw Error('Hồ sơ đã đổi. Mở lại cấu hình CRM.');
-  const names=Array.from(box.querySelectorAll('[data-crm-api-person]:checked'),el=>el.value);
-  if(!names.length)throw Error('Chọn ít nhất một nhân sự CRM.');
-  const c=crmApiConfig();c.names=[...new Set(names)];c.resolved=[];crmApiState().error='';crmApiInvalidate();closeModal();save();render();
+async function crmApiPeopleSearch(){
+  const d=crmApiPeopleDraft;if(!crmApiPeopleCurrent(d)||d.busy)return;const query=document.querySelector('[data-crm-api-person-search]').value.trim();if(!query)throw Error('Nhập tên hoặc ID CRM.');
+  d.busy=true;d.status='Đang tìm trong CRM…';crmApiPeopleRender();
+  try{const res=await crmApiSend('SEARCH_PERSONNEL',{...d.context,query});if(!crmApiPeopleCurrent(d))return;if(res.personnelVersion!==2||!Array.isArray(res.people))throw Error('Cập nhật Extension CRM 3.2.14.');d.results=res.people.map(crmApiPeopleRow);d.status=d.results.length?(res.total>d.results.length?'Có nhiều kết quả; nhập tên cụ thể hơn.':'Chọn + Thêm ở tên cần lấy.'): 'Chưa tìm thấy trong dữ liệu CRM của phiên này. Thử tên khác hoặc ID.';}
+  catch(e){if(crmApiPeopleCurrent(d))d.status=e.message||'Chưa tìm được nhân sự.';}
+  finally{if(crmApiPeopleCurrent(d)){d.busy=false;crmApiPeopleRender();}}
+}
+function crmApiPeopleAdd(index){const d=crmApiPeopleDraft;if(!crmApiPeopleCurrent(d)||d.busy)return;const p=d.results[index];if(!p)return;if(d.people.length>=20&&!d.people.some(x=>x.id===p.id))throw Error('Lưu tối đa 20 nhân sự mỗi hồ sơ/kênh.');const old=d.people.find(x=>x.id===p.id||!x.id&&x.crmName===p.crmName);if(old)Object.assign(old,p,{selected:true});else d.people.push({...p,selected:true});crmApiPeopleRender();}
+function crmApiPeopleRemove(index){const d=crmApiPeopleDraft;if(!crmApiPeopleCurrent(d)||d.busy)return;d.people.splice(index,1);crmApiPeopleRender();}
+async function crmApiSaveConfig(){
+  const d=crmApiPeopleDraft;
+  if(!d){const box=document.querySelector('#crm-api-person-list');if(!box||box.dataset.scope!==crmApiScope())throw Error('Hồ sơ đã đổi. Mở lại cấu hình CRM.');const names=Array.from(box.querySelectorAll('[data-crm-api-person]:checked'),el=>el.value);const c=crmApiConfig();c.names=[...new Set(names)];c.resolved=[];crmApiState().error='';crmApiInvalidate();closeModal();save();render();return;}
+  if(!crmApiPeopleCurrent(d)||d.busy)return;d.busy=true;d.status='';crmApiPeopleRender();
+  try{
+    if(d.people.filter(p=>p.selected).length>20)throw Error('Chọn tối đa 20 nhân sự CRM.');
+    const unresolved=d.people.filter(p=>!p.id&&p.selected);if(unresolved.length){d.status='Đang xác minh ID…';crmApiPeopleRender();const res=await crmApiSend('RESOLVE_PERSONNEL',{...d.context,names:unresolved.map(p=>p.crmName)});if(!crmApiPeopleCurrent(d))return;if(res.personnelVersion!==2||res.users?.length!==unresolved.length)throw Error('Chưa xác minh đủ nhân sự CRM.');res.users.forEach((p,i)=>Object.assign(unresolved[i],crmApiPeopleRow(p)));}
+    if(!crmApiPeopleCurrent(d))return;
+    const byId=new Map();for(const p of d.people.filter(p=>p.id)){const row=crmApiPeopleRow(p),old=byId.get(row.id);if(old)old.selected=old.selected||row.selected;else byId.set(row.id,row);}
+    const c=crmApiConfig();c.people=[...byId.values()];c.names=c.people.filter(p=>p.selected).map(p=>p.crmName);c.resolved=c.people.filter(p=>p.selected).map(({id,crmName,userName})=>({id,crmName,userName}));
+    crmApiPeopleDraft=null;crmApiState().error='';crmApiInvalidate();closeModal();save();render();
+  }catch(e){if(crmApiPeopleCurrent(d))d.status=e.message||'Chưa lưu được nhân sự.';}
+  finally{if(crmApiPeopleCurrent(d)){d.busy=false;crmApiPeopleRender();}}
 }
 function crmApiTSV(res){
   if(!Array.isArray(res.rows)||res.rows.length!==res.totalRows)throw Error('Chưa nhận đủ chi tiết CRM.');
@@ -105,12 +139,14 @@ async function crmApiLoad(){
   const ticket=++crmApiEpoch,signature=crmApiSignature(),profile=user().id,channel=db.session.channel;
   crmApiPending.set(scope,ticket);state.error='';reportCache=null;render();
   try{
-    const res=await crmApiSend('FETCH',{profile,channel,names:[...cfg.names],startDate:state.startDate,endDate:state.endDate});
+    const personIds=Array.isArray(cfg.people)?cfg.people.filter(p=>p.selected).map(p=>p.id):null;
+    const res=await crmApiSend('FETCH',{profile,channel,names:[...cfg.names],...(personIds?{personIds}:{}),startDate:state.startDate,endDate:state.endDate});
     if(ticket!==crmApiEpoch||scope!==crmApiScope()||signature!==crmApiSignature()||state!==crmApiState())return;
     if(res.profile!==profile||res.channel!==channel||res.startDate!==state.startDate||res.endDate!==state.endDate)throw Error('Kết quả CRM không thuộc bộ lọc hiện tại.');
+    if(personIds&&(res.personnelVersion!==2||!Array.isArray(res.users)||res.users.length!==personIds.length||new Set(res.users.map(p=>p.id)).size!==personIds.length||!res.users.every(p=>personIds.includes(p.id))))throw Error('CRM trả sai nhân sự đã chọn.');
     const tsv=crmApiTSV(res);
     state.cache={signature,tsv,startDate:res.startDate,endDate:res.endDate,totalRows:res.totalRows,pages:res.pages,loadedAt:res.loadedAt};state.previewPage=0;
-    cfg.resolved=res.users.map(u=>({id:u.id,crmName:u.crmName}));state.error='';save();
+    cfg.resolved=res.users.map(u=>({id:u.id,crmName:u.crmName,userName:u.userName||''}));if(personIds){for(const p of cfg.people){const fresh=cfg.resolved.find(u=>u.id===p.id);if(fresh)Object.assign(p,fresh);}cfg.names=cfg.people.filter(p=>p.selected).map(p=>p.crmName);}state.error='';save();
   }catch(e){if(ticket===crmApiEpoch&&scope===crmApiScope()){state.error=e.message||'Chưa đọc được CRM.';save();}}
   finally{if(crmApiPending.get(scope)===ticket)crmApiPending.delete(scope);reportCache=null;if(scope===crmApiScope()&&ui.view==='report')render();}
 }
@@ -128,6 +164,9 @@ perform=async function(action,a={},el){
   if(action==='crm-api-source'){const s=crmApiState();s.source=a.source==='api'?'api':'manual';s.error='';crmApiInvalidate();save();render();return;}
   if(action==='crm-api-period'){crmApiSetReportPeriod(a.period);return;}
   if(action==='crm-api-config')return crmApiOpenConfig();
+  if(action==='crm-api-person-search')return crmApiPeopleSearch();
+  if(action==='crm-api-person-add')return crmApiPeopleAdd(a.index);
+  if(action==='crm-api-person-remove')return crmApiPeopleRemove(a.index);
   if(action==='crm-api-save-config')return crmApiSaveConfig();
   if(action==='crm-api-load')return crmApiLoad();
   if(action==='crm-api-preview-page'){const s=crmApiState();s.previewPage=Math.max(0,(s.previewPage||0)+(Number(a.delta)>0?1:-1));render();return;}
@@ -137,4 +176,6 @@ perform=async function(action,a={},el){
 document.addEventListener('click',e=>{if(crmApiRangeDraft&&!e.target.closest?.('#crm-api-range-popup,[data-action="crm-api-open-range"]'))crmApiRangeClose();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&crmApiRangeDraft){e.preventDefault();crmApiRangeClose();document.querySelector('[data-action="crm-api-open-range"]')?.focus();}});
 document.addEventListener('input',e=>{if(!e.target.matches?.('[data-crm-api-search]'))return;const s=crmApiState();s.previewQuery=e.target.value;s.previewPage=0;const target=document.querySelector('#crm-api-panel .crm-api-preview-results');if(target)target.innerHTML=crmApiPreviewResults(reportData());});
+document.addEventListener('change',e=>{if(!e.target.matches?.('[data-crm-api-person]')||!crmApiPeopleCurrent(crmApiPeopleDraft)||crmApiPeopleDraft.busy)return;const p=crmApiPeopleDraft.people[Number(e.target.dataset.crmApiPerson)];if(p)p.selected=e.target.checked;});
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.matches?.('[data-crm-api-person-search]')){e.preventDefault();safely(()=>crmApiPeopleSearch());}});
 // No polling, no fetch on render, date input or route changes.
