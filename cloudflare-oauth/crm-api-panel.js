@@ -25,7 +25,13 @@ function crmApiSend(op,body={}){
 function crmApiDateLabel(v){return /^\d{4}-\d{2}-\d{2}$/.test(v||'')?v.slice(8,10)+'/'+v.slice(5,7)+'/'+v.slice(0,4):'—';}
 function crmApiToday(){return new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}
 function crmApiShiftDay(day,offset){const d=new Date(day+'T00:00:00Z');if(!Number.isFinite(d.getTime()))throw Error('Ngày CRM không hợp lệ.');d.setUTCDate(d.getUTCDate()+offset);return d.toISOString().slice(0,10);}
-function crmApiSetDays(days){const s=crmApiState();s.endDate=crmApiShiftDay(crmApiToday(),-1);s.startDate=crmApiShiftDay(s.endDate,-(days-1));s.error='';crmApiInvalidate();save();render();}
+function crmApiReportPeriod(period,today=crmApiToday()){
+  const days=period==='monday'?7:period==='thursday'?4:0;if(!days)throw Error('Kỳ báo cáo CRM không hợp lệ.');
+  const target=period==='monday'?6:3,weekday=new Date(today+'T00:00:00Z').getUTCDay();
+  const offset=(weekday-target+7)%7||7,endDate=crmApiShiftDay(today,-offset);
+  return {startDate:crmApiShiftDay(endDate,-(days-1)),endDate};
+}
+function crmApiSetReportPeriod(period){const s=crmApiState();Object.assign(s,crmApiReportPeriod(period));s.error='';crmApiInvalidate();save();render();}
 function crmApiRangeClose(){if(!crmApiRangeDraft)return;crmApiRangeDraft=null;document.querySelector('#crm-api-range-popup')?.remove();}
 function crmApiRangeOpen(){
   crmApiRangeClose();const s=crmApiState(),start=s.startDate||crmApiShiftDay(crmApiToday(),-7),end=s.endDate||crmApiShiftDay(crmApiToday(),-1);
@@ -66,7 +72,7 @@ function crmApiSourceCard(d){
   const s=crmApiState(),c=crmApiConfig(),busy=crmApiPending.has(crmApiScope()),manual=s.source!=='api';
   const controls=`<div class="crm-api-source-switch">${btn('crm-api-source','API CRM',{source:'api'},!manual?'primary':'')}${btn('crm-api-source','Dán/File',{source:'manual'},manual?'primary':'')}${btn('crm-api-config','⚙ Nhân sự')}</div>`;
   const body=manual?`<div class="drop-zone" data-drop-kind="crm"><span>Kéo thả <b>file CRM</b> (<code>.xlsx, .csv, .tsv</code>)</span>${btn('file','+ Chọn file',{kind:'crm'},'primary')}</div>${field('report',['crmPaste'],report().crmPaste,'textarea','rows="4" placeholder="Paste trực tiếp bảng CRM…"')}`:
-  `<button type="button" class="crm-api-range-trigger" data-action="crm-api-open-range" aria-haspopup="dialog" aria-label="Chọn khoảng ngày CRM"><span>▦</span><span>${s.startDate&&s.endDate?crmApiDateLabel(s.startDate)+' – '+crmApiDateLabel(s.endDate):'Chọn khoảng ngày'}</span><span>▾</span></button><div class="crm-api-actions">${btn('crm-api-days','4 ngày',{days:4})}${btn('crm-api-days','7 ngày',{days:7})}<button type="button" class="btn primary" data-action="crm-api-load" ${busy?'disabled':''}>${busy?'Đang lấy…':'Lấy CRM'}</button></div><div class="crm-api-status ${s.error?'crm-api-error':''}" role="status" aria-live="polite">${esc(busy?'Đang lấy toàn bộ dữ liệu…':s.error||(!c.names.length?'Chọn nhân sự tại ⚙.':s.cache?((crmApiReady()?'Đã lấy ':'Cần lấy lại · ')+s.cache.totalRows+'/'+s.cache.totalRows+' dòng · '+crmApiDateLabel(s.cache.startDate)+'–'+crmApiDateLabel(s.cache.endDate)):'Chọn khoảng ngày rồi bấm Lấy CRM.'))}</div>${crmApiPreview(d)}${s.cache?`<details class="crm-api-details"><summary>${esc(c.names.join(' · '))} · ${esc(new Date(s.cache.loadedAt).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'}))}</summary><small>${s.cache.pages} lượt dữ liệu · ${s.cache.totalRows} dòng đã đối chiếu tổng</small></details>`:''}`;
+  `<button type="button" class="crm-api-range-trigger" data-action="crm-api-open-range" aria-haspopup="dialog" aria-label="Chọn khoảng ngày CRM"><span>▦</span><span>${s.startDate&&s.endDate?crmApiDateLabel(s.startDate)+' – '+crmApiDateLabel(s.endDate):'Chọn khoảng ngày'}</span><span>▾</span></button><div class="crm-api-actions">${btn('crm-api-period','BC Thứ 2',{period:'monday'})}${btn('crm-api-period','BC Thứ 5',{period:'thursday'})}<button type="button" class="btn primary" data-action="crm-api-load" ${busy?'disabled':''}>${busy?'Đang lấy…':'Lấy CRM'}</button></div><div class="crm-api-status ${s.error?'crm-api-error':''}" role="status" aria-live="polite">${esc(busy?'Đang lấy toàn bộ dữ liệu…':s.error||(!c.names.length?'Chọn nhân sự tại ⚙.':s.cache?((crmApiReady()?'Đã lấy ':'Cần lấy lại · ')+s.cache.totalRows+'/'+s.cache.totalRows+' dòng · '+crmApiDateLabel(s.cache.startDate)+'–'+crmApiDateLabel(s.cache.endDate)):'Chọn khoảng ngày rồi bấm Lấy CRM.'))}</div>${crmApiPreview(d)}${s.cache?`<details class="crm-api-details"><summary>${esc(c.names.join(' · '))} · ${esc(new Date(s.cache.loadedAt).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'}))}</summary><small>${s.cache.pages} lượt dữ liệu · ${s.cache.totalRows} dòng đã đối chiếu tổng</small></details>`:''}`;
   return card('2. Nguồn CRM',`<section id="crm-api-panel" data-crm-ui="range-v3">${controls}${body}</section>`,`<span class="count-pill">${d.crm.length} mã</span>`).replace('<section class="card">','<section id="crm-api-source-card" class="card crm-api-card">');
 }
 async function crmApiOpenConfig(){
@@ -120,7 +126,7 @@ perform=async function(action,a={},el){
   if(action==='crm-api-range-cancel')return crmApiRangeClose();
   if(action==='view')crmApiRangeClose();
   if(action==='crm-api-source'){const s=crmApiState();s.source=a.source==='api'?'api':'manual';s.error='';crmApiInvalidate();save();render();return;}
-  if(action==='crm-api-days'){crmApiSetDays(Number(a.days)===4?4:7);return;}
+  if(action==='crm-api-period'){crmApiSetReportPeriod(a.period);return;}
   if(action==='crm-api-config')return crmApiOpenConfig();
   if(action==='crm-api-save-config')return crmApiSaveConfig();
   if(action==='crm-api-load')return crmApiLoad();

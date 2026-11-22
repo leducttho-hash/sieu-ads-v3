@@ -4,7 +4,7 @@ Nhánh: `feature/oauth-backend-pilot`, base `187d2a5cccdcecf825af85833c4c4227eac
 
 Build `node cloudflare-oauth/prepare.mjs`. Deploy tiếp tục dùng cấu hình Worker hiện có. Không đổi secrets, D1, schema, OAuth, main hay root index.html.
 
-Nguồn CRM có Dán/File và API CRM; cấu hình người dùng/kênh và dữ liệu theo hồ sơ/kho/kênh được lưu cùng dữ liệu cục bộ hiện tại. API chỉ chạy khi bấm Lấy CRM. Trên Pilot, nút 4/7 ngày luôn lấy 4/7 ngày đã qua trước hôm nay theo giờ Việt Nam, kết thúc hôm qua; không thay presets của Extension. Khoảng ngày sai, thiếu dữ liệu, lỗi CRM hay thay đổi bộ lọc làm chặn xuất API; không tự ghi số 0 thay trường thiếu.
+Nguồn CRM có Dán/File và API CRM; cấu hình người dùng/kênh và dữ liệu theo hồ sơ/kho/kênh được lưu cùng dữ liệu cục bộ hiện tại. API chỉ chạy khi bấm Lấy CRM. Trên Pilot, hai nút BC Thứ 2 và BC Thứ 5 chọn kỳ CN–T7 hoặc CN–T4 gần nhất đã hoàn tất, không lấy ngày tương lai/hôm nay chưa kết thúc; không thay presets của Extension. Khoảng ngày sai, thiếu dữ liệu, lỗi CRM hay thay đổi bộ lọc làm chặn xuất API; không tự ghi số 0 thay trường thiếu.
 
 Module chuyển chi tiết đã xác minh thành TSV có header, đưa vào chính parser và bộ ghép mã hiện tại. Không lấy trung bình tỷ lệ; không sửa công thức TLC, quy tắc 8B/L12/TET, link, Daily, Build hoặc Scale.
 
@@ -49,3 +49,7 @@ Kiểm thử không gọi CRM/Sheet thật, không ghi dữ liệu lên Sheet. C
 4. Cùng file Meta/link và cùng cấu hình: so API với cách dán thủ công từng mã, chỉ số, CRM-only, file XLSX/TSV và công thức.
 5. Đổi ngày không tự gọi, xuất phải yêu cầu lấy lại; đổi tab giữ snapshot; đổi hồ sơ không lẫn tên/dữ liệu; F5/backup khôi phục giữ cấu hình.
 6. Nếu API chưa dùng được, chuyển Dán/File. Không cần thay đổi cấu hình Google, mã CRM_TOKEN hay lịch Auto Báo Cáo đang chạy.
+
+## Nút kỳ báo cáo theo tuần
+
+Đổi riêng hai nút nhanh thành BC Thứ 2 (CN–T7) và BC Thứ 5 (CN–T4). Tính theo ngày Việt Nam, dùng kỳ gần nhất có ngày cuối trước hôm nay; bấm ngày khác trong tuần vẫn không chọn kỳ chưa hoàn tất. Ví dụ Thứ 2 23/11/2026 chọn 15–21/11; Thứ 5 26/11 chọn 22–25/11. Nút chỉ cập nhật khoảng ngày, không gọi API. Giữ nguyên chọn khoảng ngày thủ công, dữ liệu, công thức, UI khác và Extension.
