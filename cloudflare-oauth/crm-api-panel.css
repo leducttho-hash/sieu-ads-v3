@@ -1,12 +1,14 @@
-#crm-api-source-card > .section-head {display:flex;flex:0 0 auto;flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:space-between;min-height:0;gap:8px}
-.report-inputs > .crm-api-card > .section-head h2 {margin:0;text-align:left;flex:1}
-.report-inputs > .crm-api-card > .section-head > .actions {flex:0 0 auto;margin:0}
+#crm-api-report-inputs > .card > .section-head {display:flex;flex:0 0 76px;box-sizing:border-box;flex-direction:column;flex-wrap:nowrap;align-items:center;justify-content:flex-start;min-height:76px;gap:8px;padding-bottom:10px;margin-bottom:12px}
+#crm-api-report-inputs > .card > .section-head h2 {margin:0;flex:0 0 auto;line-height:20px;text-align:center}
+#crm-api-report-inputs > .card > .section-head > .actions {display:flex;flex:0 0 32px;align-items:center;justify-content:center;margin:0;gap:8px}
+#crm-api-report-inputs > .card > .drop-zone {flex:0 0 auto;min-height:88px;box-sizing:border-box}
+#crm-api-report-inputs > .card > .source-line {flex:0 0 auto}
 #crm-api-panel {display:flex;flex-direction:column;gap:10px;min-width:0;flex:1}
 #crm-api-panel .crm-api-source-switch,#crm-api-panel .crm-api-actions {display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 #crm-api-panel .crm-api-source-switch .btn:last-child {margin-left:auto}
-#crm-api-panel .crm-api-dates {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-#crm-api-panel .crm-api-dates label {display:flex;flex-direction:column;gap:5px;font-size:12px}
-#crm-api-panel .crm-api-dates input {width:100%;min-width:0;font:inherit;font-size:14px;box-sizing:border-box}
+#crm-api-panel .crm-api-range-trigger {display:flex;align-items:center;gap:9px;width:100%;min-height:42px;border:1px solid var(--border,#d9dfe8);border-radius:8px;padding:9px 12px;background:var(--surface,#fff);color:var(--text,#182334);font:inherit;font-size:13px;cursor:pointer}
+#crm-api-panel .crm-api-range-trigger span:last-child {margin-left:auto}
+#crm-api-panel .crm-api-range-trigger:focus-visible {outline:2px solid var(--accent,#6366f1);outline-offset:2px}
 #crm-api-panel .crm-api-actions .primary {margin-left:auto}
 #crm-api-panel .crm-api-status {font-size:13px;overflow-wrap:anywhere;min-height:20px}
 #crm-api-panel .crm-api-error {color:var(--danger,#b42318)}
@@ -25,3 +27,20 @@
 #crm-api-panel .crm-api-preview-pager > span:first-child {margin-right:auto}
 #crm-api-panel .crm-api-preview-pager .btn {min-height:25px;padding:3px 9px;font-size:12px}
 #crm-api-panel .crm-api-empty {margin:0;padding:20px 10px;color:var(--muted,#64748b);font-size:12px;text-align:center}
+#crm-api-range-popup {position:fixed;z-index:10020;box-sizing:border-box;width:560px;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);overflow:auto;background:var(--surface,#fff);color:var(--text,#182334);border:1px solid var(--border,#dfe4ec);border-radius:10px;padding:12px;box-shadow:0 12px 40px #0f172a26;font-size:12px}
+#crm-api-range-popup .crm-range-toolbar {display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px}
+#crm-api-range-popup .crm-range-toolbar .btn {min-height:28px;padding:3px 12px}
+#crm-api-range-popup .crm-range-calendars {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+#crm-api-range-popup .crm-range-month h3 {font-size:13px;line-height:20px;font-weight:600;text-align:center;margin:6px 0 10px}
+#crm-api-range-popup .crm-range-week,#crm-api-range-popup .crm-range-grid {display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px}
+#crm-api-range-popup .crm-range-week {text-align:center;color:var(--muted,#64748b);font-size:10px;margin-bottom:5px}
+#crm-api-range-popup .crm-range-day {font:inherit;font-size:12px;min-width:0;min-height:30px;padding:4px 2px;border:0;border-radius:4px;background:transparent;color:inherit;cursor:pointer}
+#crm-api-range-popup .crm-range-day:hover {background:var(--surface-subtle,#f1f5f9)}
+#crm-api-range-popup .crm-range-day.outside-month {opacity:.35}
+#crm-api-range-popup .crm-range-day.in-range {background:color-mix(in srgb,var(--accent,#6366f1) 12%,var(--surface,#fff));opacity:1}
+#crm-api-range-popup .crm-range-day.selected {background:var(--accent,#6366f1);color:white;opacity:1;font-weight:700}
+#crm-api-range-popup .crm-range-day:disabled {opacity:.2;cursor:default}
+#crm-api-range-popup .crm-range-footer {display:flex;align-items:center;justify-content:flex-end;gap:8px;padding-top:10px;border-top:1px solid var(--border,#e2e8f0);margin-top:10px}
+#crm-api-range-popup .crm-range-footer > span {margin-right:auto;font-size:11px}
+#crm-api-range-popup .crm-range-footer .btn {font-size:12px;min-height:29px;padding:5px 10px}
+@media(max-width:460px){#crm-api-range-popup .crm-range-calendars {grid-template-columns:1fr;gap:10px}#crm-api-range-popup .crm-range-month+.crm-range-month {border-top:1px solid var(--border,#e2e8f0);padding-top:6px}}
