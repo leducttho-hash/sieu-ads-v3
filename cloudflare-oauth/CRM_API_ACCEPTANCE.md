@@ -8,9 +8,17 @@ Nguồn CRM có Dán/File và API CRM; cấu hình người dùng/kênh và dữ
 
 Module chuyển chi tiết đã xác minh thành TSV có header, đưa vào chính parser và bộ ghép mã hiện tại. Không lấy trung bình tỷ lệ; không sửa công thức TLC, quy tắc 8B/L12/TET, link, Daily, Build hoặc Scale.
 
-Phải cập nhật Extension lên 3.2.12 trước khi dùng API. Origin cho phép: `https://sieuads-oauth-pilot.leducttho.workers.dev`; Extension ID giữ nguyên `mopcgklafblfklmngbhccfonefidcajf`. Không cần mở side panel. Module cầu nối nguồn được lưu trong `cloudflare-oauth/extension-bridge/`; ZIP đầy đủ được phát hành riêng.
+Phải cập nhật Extension lên 3.2.13 trước khi dùng API. Origin cho phép: `https://sieuads-oauth-pilot.leducttho.workers.dev`; Extension ID giữ nguyên `mopcgklafblfklmngbhccfonefidcajf`. Không cần mở side panel. Module cầu nối nguồn được lưu trong `cloudflare-oauth/extension-bridge/`; ZIP đầy đủ được phát hành riêng.
 
-## Hotfix 3.2.12
+## Hotfix 3.2.13 — đúng endpoint chi tiết MESS
+
+Request URL do người dùng xác nhận là `https://bituchat-report-api.vuihoc.vn/api/v1/marketing/report/rows`. Cầu nối cũ gọi `/marketing/report`, là hợp đồng số tổng đang dùng trong BC Ngày/BCKG, rồi đọc nó như hợp đồng chi tiết có metaData. Đây là sai endpoint; nới chốt page trước đó không giải quyết được nguyên nhân.
+
+Chỉ đổi URL trong module cầu nối sang `/report/rows`. Không đổi CRM_MESS_API_BASE hoặc mã BC Ngày/BCKG cũ, UI Pilot, OAuth, presets, công thức, ghép mã, bộ lọc hay cache. Lọc nhân sự bằng ID đã xác minh, không đưa chuỗi tìm tên giao diện vào nguồn báo cáo.
+
+Bổ sung kiểm thử HTTP phân biệt endpoint tổng với endpoint rows (không dùng cùng một mock cho mọi đường dẫn). Hai response chi tiết mới được kiểm tra riêng: lấy đủ hai trang và đối chiếu cả sáu tổng; tỷ lệ null và các dòng hội thoại bằng 0 nhưng có contact/đơn được giữ. Dữ liệu CRM thật không được đưa vào repository công khai; bài test trong repository dùng dữ liệu tổng hợp. Kiểm thử không đăng nhập CRM thật và không ghi Sheet.
+
+## Hotfix 3.2.12 (lịch sử)
 
 Ảnh lỗi `CRM thiếu hoặc sai page` xác định nhánh chặn ở parser pagination; chưa có response thực tế mới để khẳng định kiểu giá trị `page` nào đã được trả. Không giả định đây là lỗi đăng nhập. Parser không bắt buộc echo page: traversal dùng page request, nhưng vẫn yêu cầu tổng số dòng, chiều dài từng trang, khóa dòng không trùng và sáu tổng khớp. Giá trị page được trả rõ ràng mà mâu thuẫn/sai dạng vẫn bị từ chối. Hỗ trợ chuỗi số nguyên, alias currentPage/per_page, giới hạn page size của server; không nới kiểm tra chỉ số tài chính.
 

@@ -110,7 +110,9 @@
       const requestedLimit=first?.limit||50;
       const q=new URLSearchParams({page:String(page),limit:String(requestedLimit),date_from:m.startDate,date_to:m.endDate,sort_by:'conversation_count',sort_dir:'desc'});
       for(const id of ids)q.append('marketer_id[]',String(id));
-      const j=await json(CRM_MESS_API_BASE+'?'+q,session.token), meta=messMeta(j,page,requestedLimit);
+      // /report is the aggregate contract used by the existing daily/slot flows.
+      // Pilot needs the paginated detail contract, verified from CRM Network URLs.
+      const j=await json(CRM_MESS_API_BASE+'/rows?'+q,session.token), meta=messMeta(j,page,requestedLimit);
       const total=Object.fromEntries(MESS.map(k=>[k,int(j.data.totalReport?.[k],k)]));
       const sig=JSON.stringify({meta,total});if(!first){first=meta;signature=sig;}else check(sig===signature,'CRM thay đổi tổng trong lúc tải các trang. Bấm Lấy CRM để thử lại.');
       const expected=Math.max(0,Math.min(first.limit,first.total-(page-1)*first.limit));check(j.data.data.length===expected,'Thiếu dòng trong trang MESS '+page+'.');
