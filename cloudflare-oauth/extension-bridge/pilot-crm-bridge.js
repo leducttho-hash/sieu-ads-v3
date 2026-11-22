@@ -78,24 +78,42 @@
     }
     return {rows, pages:2, totalRows:rows.length, totals:levelTotals};
   }
-  function messMeta(j, page) {
+  function messMeta(j, page, requestedLimit) {
     const meta=j.data.metaData;
-    check(meta && int(meta.page,'page') === page && int(meta.limit,'limit') === 50,'CRM trả sai trang MESS.');
-    const total=int(meta.total,'total'), pages=int(meta.totalPage,'totalPage');
-    check(int(j.totalItem,'totalItem') === total && pages === Math.ceil(total/50) && pages <= 200,'Phân trang MESS chưa nhất quán hoặc quá lớn.');
+    check(meta && typeof meta==='object' && !Array.isArray(meta),'CRM thiếu thông tin phân trang MESS.');
+    // Page echoes are protocol metadata, not financial metrics. Some CRM responses
+    // omit them. The requested page drives traversal; count, uniqueness and totals
+    // independently prove completeness. An explicit contradictory echo still fails.
+    const optionalInt=(value,field)=>{
+      if(value===undefined||value===null||value==='')return null;
+      const raw=typeof value==='string'?value.trim():value;
+      check((typeof raw==='number'||typeof raw==='string') && /^\d+(?:\.0+)?$/.test(String(raw)),'CRM sai thông tin phân trang '+field+'.');
+      return int(Number(raw),field);
+    };
+    const values=(object,keys)=>keys.filter(k=>Object.hasOwn(object,k)).map(k=>[k,optionalInt(object[k],k)]).filter(x=>x[1]!==null);
+    const echo=values(meta,['page','currentPage','current_page']);
+    check(echo.every(([,n])=>n===page),'CRM trả sai trang MESS.');
+    const limits=values(meta,['limit','perPage','per_page']);
+    const limit=limits[0]?.[1]??requestedLimit;
+    check(limit>0 && limit<=requestedLimit && limits.every(([,n])=>n===limit),'CRM trả sai số dòng mỗi trang MESS.');
+    const totals=[...values(meta,['total']),...values(j,['totalItem'])];
+    check(totals.length>0 && totals.every(([,n])=>n===totals[0][1]),'CRM thiếu hoặc mâu thuẫn tổng số dòng MESS.');
+    const total=totals[0][1],pages=Math.ceil(total/limit),pageCounts=values(meta,['totalPage','totalPages','last_page']);
+    check(pages<=200 && pageCounts.every(([,n])=>n===pages||(total===0&&n===1)),'Phân trang MESS chưa nhất quán hoặc quá lớn.');
     check(Array.isArray(j.data.data),'CRM thiếu chi tiết MESS.');
-    return {total,pages};
+    return {total,pages,limit};
   }
   async function mess(m, users, session) {
     const ids=new Set(users.map(x=>x.id)), raw=[], rows=[], seen=new Set(),deadline=Date.now()+180000;let first, signature;
     for(let page=1;page <= (first?.pages || 1);page++) {
       check(Date.now()<deadline,'CRM tải quá lâu. Chưa cập nhật báo cáo.');
-      const q=new URLSearchParams({page:String(page),limit:'50',date_from:m.startDate,date_to:m.endDate,sort_by:'conversation_count',sort_dir:'desc'});
+      const requestedLimit=first?.limit||50;
+      const q=new URLSearchParams({page:String(page),limit:String(requestedLimit),date_from:m.startDate,date_to:m.endDate,sort_by:'conversation_count',sort_dir:'desc'});
       for(const id of ids)q.append('marketer_id[]',String(id));
-      const j=await json(CRM_MESS_API_BASE+'?'+q,session.token), meta=messMeta(j,page);
+      const j=await json(CRM_MESS_API_BASE+'?'+q,session.token), meta=messMeta(j,page,requestedLimit);
       const total=Object.fromEntries(MESS.map(k=>[k,int(j.data.totalReport?.[k],k)]));
       const sig=JSON.stringify({meta,total});if(!first){first=meta;signature=sig;}else check(sig===signature,'CRM thay đổi tổng trong lúc tải các trang. Bấm Lấy CRM để thử lại.');
-      const expected=Math.max(0,Math.min(50,first.total-(page-1)*50));check(j.data.data.length===expected,'Thiếu dòng trong trang MESS '+page+'.');
+      const expected=Math.max(0,Math.min(first.limit,first.total-(page-1)*first.limit));check(j.data.data.length===expected,'Thiếu dòng trong trang MESS '+page+'.');
       for(const r of j.data.data) {
         const id=int(r.marketer_id,'marketer_id');check(ids.has(id),'CRM trả MESS của nhân sự ngoài cấu hình.');
         const code=text(r.master_id,'master_id'), content=text(r.content_id,'content_id'), fanpage=text(r.fanpage_name,'fanpage_name');

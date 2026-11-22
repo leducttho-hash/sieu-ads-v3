@@ -21,6 +21,9 @@ test('Pilot CRM bridge loads all pages, reconciles and never exposes credentials
 test('Pilot CONFIG never calls CRM and only returns configured names',async()=>{const f=mock(),r=await f.api.handle({...f.message,op:'CONFIG'},f.sender);assert.equal(r.mappings.length,1);assert.equal(f.calls.length,0);});
 test('Pilot origin and iframe boundaries reject before network',async()=>{for(const sender of [{url:'https://evil.test/'},{url:origin+'/',origin,frameId:1}]){const f=mock();await assert.rejects(f.api.handle(f.message,sender));assert.equal(f.calls.length,0);}});
 test('Pilot rejects arbitrary names and operations',async()=>{for(const patch of [{names:['Other']},{op:'PROXY'},{channel:'WRITE'},{endDate:'2027-01-01'}]){const f=mock();await assert.rejects(f.api.handle({...f.message,...patch},f.sender));assert.equal(f.calls.length,0);}});
+test('Pilot supports omitted MESS page echo without weakening completeness checks',async()=>{const f=mock(j=>{delete j.data.metaData.page;});const r=await f.api.handle(f.message,f.sender);assert.equal(r.rows.length,135);assert.equal(f.calls.length,3);});
+test('Pilot supports normalized pagination strings and explicit currentPage',async()=>{const f=mock(j=>{j.data.metaData.currentPage=String(j.data.metaData.page);delete j.data.metaData.page;j.data.metaData.limit='50.0';j.data.metaData.total='135';});const r=await f.api.handle(f.message,f.sender);assert.equal(r.rows.length,135);});
+test('Pilot missing page echo still rejects incomplete page',async()=>{const f=mock((j,p)=>{delete j.data.metaData.page;if(p===2)j.data.data.pop();});await assert.rejects(f.api.handle(f.message,f.sender));});
 for(const [name,change] of [
  ['missing page row',(j,p)=>{if(p===2)j.data.data.pop();}],
  ['wrong page',(j,p)=>{if(p===2)j.data.metaData.page=1;}],

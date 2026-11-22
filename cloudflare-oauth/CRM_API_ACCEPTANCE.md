@@ -8,9 +8,15 @@ Nguồn CRM có Dán/File và API CRM; cấu hình người dùng/kênh và dữ
 
 Module chuyển chi tiết đã xác minh thành TSV có header, đưa vào chính parser và bộ ghép mã hiện tại. Không lấy trung bình tỷ lệ; không sửa công thức TLC, quy tắc 8B/L12/TET, link, Daily, Build hoặc Scale.
 
-Phải cập nhật Extension lên 3.2.11 trước khi dùng API. Origin cho phép: `https://sieuads-oauth-pilot.leducttho.workers.dev`; Extension ID giữ nguyên `mopcgklafblfklmngbhccfonefidcajf`. Không cần mở side panel. Module cầu nối nguồn được lưu trong `cloudflare-oauth/extension-bridge/`; ZIP đầy đủ được phát hành riêng.
+Phải cập nhật Extension lên 3.2.12 trước khi dùng API. Origin cho phép: `https://sieuads-oauth-pilot.leducttho.workers.dev`; Extension ID giữ nguyên `mopcgklafblfklmngbhccfonefidcajf`. Không cần mở side panel. Module cầu nối nguồn được lưu trong `cloudflare-oauth/extension-bridge/`; ZIP đầy đủ được phát hành riêng.
 
-## Kết quả kiểm tra
+## Hotfix 3.2.12
+
+Ảnh lỗi `CRM thiếu hoặc sai page` xác định nhánh chặn ở parser pagination; chưa có response thực tế mới để khẳng định kiểu giá trị `page` nào đã được trả. Không giả định đây là lỗi đăng nhập. Parser không bắt buộc echo page: traversal dùng page request, nhưng vẫn yêu cầu tổng số dòng, chiều dài từng trang, khóa dòng không trùng và sáu tổng khớp. Giá trị page được trả rõ ràng mà mâu thuẫn/sai dạng vẫn bị từ chối. Hỗ trợ chuỗi số nguyên, alias currentPage/per_page, giới hạn page size của server; không nới kiểm tra chỉ số tài chính.
+
+Khung CRM có ID riêng để chặn rule CSS cũ kéo giãn section-head. Preview mã dùng chính kết quả parser hiện tại, có tìm và phân trang cục bộ, không tạo request CRM. Snapshot cũ giữ lại và gắn nhãn Mã lần lấy trước khi đổi bộ lọc; chặn xuất vẫn giữ nguyên.
+
+## Kết quả kiểm tra ban đầu và kiểm tra bổ sung
 
 - 26 kiểm tra cầu nối trên JSON thật được cấp, gồm MESS 135 dòng/3 trang và CĐ 110 dòng/2 cấp học.
 - 11 kiểm tra DOM/sự kiện: không tự gọi, nút 4/7 ngày, manual/API tương đương, chặn xuất khi đổi ngày, scope, phản hồi đến muộn, giữ dữ liệu khi đổi tab, lưu/tải lại, khôi phục backup toàn bộ và không có token trong dữ liệu backup.

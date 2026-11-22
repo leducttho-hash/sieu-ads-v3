@@ -1,4 +1,7 @@
-#crm-api-panel {display:flex;flex-direction:column;gap:12px;min-width:0}
+#crm-api-source-card > .section-head {display:flex;flex:0 0 auto;flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:space-between;min-height:0;gap:8px}
+.report-inputs > .crm-api-card > .section-head h2 {margin:0;text-align:left;flex:1}
+.report-inputs > .crm-api-card > .section-head > .actions {flex:0 0 auto;margin:0}
+#crm-api-panel {display:flex;flex-direction:column;gap:10px;min-width:0;flex:1}
 #crm-api-panel .crm-api-source-switch,#crm-api-panel .crm-api-actions {display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 #crm-api-panel .crm-api-source-switch .btn:last-child {margin-left:auto}
 #crm-api-panel .crm-api-dates {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
@@ -6,5 +9,19 @@
 #crm-api-panel .crm-api-dates input {width:100%;min-width:0;font:inherit;font-size:14px;box-sizing:border-box}
 #crm-api-panel .crm-api-actions .primary {margin-left:auto}
 #crm-api-panel .crm-api-status {font-size:13px;overflow-wrap:anywhere;min-height:20px}
+#crm-api-panel .crm-api-error {color:var(--danger,#b42318)}
 #crm-api-panel .crm-api-details {font-size:12px;opacity:.8;overflow-wrap:anywhere}
 #crm-api-person-list {display:grid;gap:10px}
+#crm-api-panel .crm-api-preview {border:1px solid var(--border,#e2e8f0);border-radius:8px;overflow:hidden;min-width:0;background:var(--surface,#fff)}
+#crm-api-panel .crm-api-preview-head {display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:var(--surface-subtle,#f8fafc);font-size:12px}
+#crm-api-panel .crm-api-preview-head input {width:125px;min-width:0;min-height:28px;padding:4px 8px;font-size:12px}
+#crm-api-panel .crm-api-preview-scroll {max-height:210px;min-height:88px;overflow:auto}
+#crm-api-panel .crm-api-preview table {width:100%;font-size:11px;border-collapse:collapse;table-layout:auto}
+#crm-api-panel .crm-api-preview th,#crm-api-panel .crm-api-preview td {padding:7px 8px;white-space:nowrap;text-align:right;border-bottom:1px solid var(--border-subtle,#edf0f4)}
+#crm-api-panel .crm-api-preview th {position:sticky;top:0;background:var(--surface-subtle,#f8fafc);z-index:1}
+#crm-api-panel .crm-api-preview th:first-child,#crm-api-panel .crm-api-preview td:first-child {text-align:left}
+#crm-api-panel .crm-api-preview td.crm-api-code {font-family:ui-monospace,monospace;font-weight:600;white-space:normal;overflow-wrap:anywhere;min-width:110px}
+#crm-api-panel .crm-api-preview-pager {display:flex;align-items:center;justify-content:flex-end;gap:7px;padding:5px 8px;font-size:11px}
+#crm-api-panel .crm-api-preview-pager > span:first-child {margin-right:auto}
+#crm-api-panel .crm-api-preview-pager .btn {min-height:25px;padding:3px 9px;font-size:12px}
+#crm-api-panel .crm-api-empty {margin:0;padding:20px 10px;color:var(--muted,#64748b);font-size:12px;text-align:center}
