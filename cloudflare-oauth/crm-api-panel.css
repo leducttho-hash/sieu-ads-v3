@@ -1,0 +1,10 @@
+#crm-api-panel {display:flex;flex-direction:column;gap:12px;min-width:0}
+#crm-api-panel .crm-api-source-switch,#crm-api-panel .crm-api-actions {display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#crm-api-panel .crm-api-source-switch .btn:last-child {margin-left:auto}
+#crm-api-panel .crm-api-dates {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#crm-api-panel .crm-api-dates label {display:flex;flex-direction:column;gap:5px;font-size:12px}
+#crm-api-panel .crm-api-dates input {width:100%;min-width:0;font:inherit;font-size:14px;box-sizing:border-box}
+#crm-api-panel .crm-api-actions .primary {margin-left:auto}
+#crm-api-panel .crm-api-status {font-size:13px;overflow-wrap:anywhere;min-height:20px}
+#crm-api-panel .crm-api-details {font-size:12px;opacity:.8;overflow-wrap:anywhere}
+#crm-api-person-list {display:grid;gap:10px}

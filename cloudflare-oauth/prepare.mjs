@@ -25,9 +25,23 @@ html=html.replace(' const cfg=db.warehouseSheetSync[sk];',' const cfg=db.warehou
 html=html.replace('id="sync-oauth-client-id"','id="sync-oauth-client-id" readonly title="Client ID được quản lý trên backend thử nghiệm"');
 html=html.replace('Đã kết nối · giữ phiên khi đổi Kho và tải lại tab.','Đã kết nối · tự gia hạn qua backend.');
 html=html.replace('Giữ kết nối trong tab này; không đưa token vào Backup.','Quyền gia hạn được mã hóa trên backend; không đưa token vào HTML hoặc Backup.');
+// Isolated CRM input adapter: root index and all existing report rules stay untouched.
+const crmAddon=await readFile(resolve(here,'crm-api-panel.js'),'utf8');
+function crmReplace(old,value){if(html.split(old).length!==2)throw Error('CRM hook changed or ambiguous: '+old.slice(0,80));html=html.replace(old,value);}
+const reportStart=html.indexOf('function reportView(){');
+const crmCardStart=html.indexOf("${card('2. Nguồn CRM',",reportStart);
+const crmCardEnd=html.indexOf("${card('3. Link bài viết',",crmCardStart);
+if(reportStart<0||crmCardStart<0||crmCardEnd<0)throw Error('CRM source card not found');
+html=html.slice(0,crmCardStart)+'${crmApiSourceCard(d)}'+html.slice(crmCardEnd);
+crmReplace("a=C.parseDelimitedMatrix(r.crmPaste,'\\t');if(!a.length)return[];", "a=C.parseDelimitedMatrix(crmApiInputText(r),'\\t');if(!a.length)return[];");
+crmReplace('function switchScope(type,value){sheetScopeEpoch++;', 'function switchScope(type,value){crmApiInvalidate();sheetScopeEpoch++;');
+crmReplace("document.addEventListener('click',e=>{if(!e.target.closest('details.inline-menu'))", crmAddon+"\ndocument.addEventListener('click',e=>{if(!e.target.closest('details.inline-menu'))");
+crmReplace('</head>','<link rel="stylesheet" href="/crm-api-panel.css"></head>');
 await rm(out,{recursive:true,force:true});await mkdir(out,{recursive:true});
 await writeFile(resolve(out,'index.html'),html);
 await copyFile(resolve(here,'backend-client.js'),resolve(out,'backend-client.js'));
+await copyFile(resolve(here,'crm-api-panel.css'),resolve(out,'crm-api-panel.css'));
 for(const asset of ['excel-preview-worker.js','vendor-exceljs-4.4.0.min.js','EXCELJS-LICENSE.txt'])await copyFile(resolve(root,asset),resolve(out,asset));
 await cp(resolve(here,'pages'),out,{recursive:true});
 console.log('Prepared isolated OAuth pilot; original index.html unchanged.');
+
