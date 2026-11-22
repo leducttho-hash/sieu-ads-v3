@@ -23,6 +23,11 @@
 #crm-api-panel .crm-api-preview th {position:sticky;top:0;background:var(--surface-subtle,#f8fafc);z-index:1}
 #crm-api-panel .crm-api-preview th:first-child,#crm-api-panel .crm-api-preview td:first-child {text-align:left}
 #crm-api-panel .crm-api-preview td.crm-api-code {font-family:ui-monospace,monospace;font-weight:600;white-space:normal;overflow-wrap:anywhere;min-width:110px}
+#crm-api-panel .crm-api-preview table.crm-api-mess-preview {table-layout:fixed;width:100%;max-width:100%}
+#crm-api-panel .crm-api-mess-preview th,#crm-api-panel .crm-api-mess-preview td {padding:7px 4px;min-width:0;font-variant-numeric:tabular-nums}
+#crm-api-panel .crm-api-mess-preview th {font-size:10px;letter-spacing:0}
+#crm-api-panel .crm-api-mess-preview td.crm-api-code {min-width:0}
+#crm-api-panel .crm-api-mess-preview td:last-child {white-space:normal;overflow-wrap:anywhere}
 #crm-api-panel .crm-api-preview-pager {display:flex;align-items:center;justify-content:flex-end;gap:7px;padding:5px 8px;font-size:11px}
 #crm-api-panel .crm-api-preview-pager > span:first-child {margin-right:auto}
 #crm-api-panel .crm-api-preview-pager .btn {min-height:25px;padding:3px 9px;font-size:12px}
