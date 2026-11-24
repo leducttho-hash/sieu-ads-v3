@@ -58,10 +58,10 @@ async function start(req,env,cfg,url){
  await env.AUTH_DB.prepare('DELETE FROM oauth_flows WHERE expires_at<?').bind(now()).run();
  await env.AUTH_DB.prepare('DELETE FROM app_sessions WHERE expires_at<?').bind(now()).run();
  await env.AUTH_DB.prepare('DELETE FROM oauth_rate_limits WHERE expires_at<?').bind(now()).run();
- const stateHash=await digest(state),wantsDrive=url.searchParams.get('excel')==='1';
- await env.AUTH_DB.prepare('INSERT INTO oauth_flows(state_hash,flow_hash,profile,verifier_cipher,expires_at,wants_drive) VALUES(?,?,?,?,?,?)').bind(stateHash,await digest(flow),profile,await seal(cfg,{verifier},'oauth-flow:'+stateHash),expires,Number(wantsDrive)).run();
+ const stateHash=await digest(state),loginOnly=url.searchParams.get('login')==='1',wantsDrive=!loginOnly&&url.searchParams.get('excel')==='1';
+ await env.AUTH_DB.prepare('INSERT INTO oauth_flows(state_hash,flow_hash,profile,verifier_cipher,expires_at,wants_drive) VALUES(?,?,?,?,?,?)').bind(stateHash,await digest(flow),profile,await seal(cfg,{verifier,loginOnly},'oauth-flow:'+stateHash),expires,Number(wantsDrive)).run();
  const target=new URL('https://accounts.google.com/o/oauth2/v2/auth');
- Object.entries({client_id:env.GOOGLE_CLIENT_ID,redirect_uri:cfg.origin+'/auth/callback',response_type:'code',scope:'openid email '+SHEETS+(wantsDrive?' '+DRIVE:''),access_type:'offline',include_granted_scopes:'true',prompt:'consent select_account',state,code_challenge:b64url(await crypto.subtle.digest('SHA-256',encoder.encode(verifier))),code_challenge_method:'S256'}).forEach(([k,v])=>target.searchParams.set(k,v));
+ Object.entries({client_id:env.GOOGLE_CLIENT_ID,redirect_uri:cfg.origin+'/auth/callback',response_type:'code',scope:loginOnly?'openid email':'openid email '+SHEETS+(wantsDrive?' '+DRIVE:''),...(loginOnly?{include_granted_scopes:'false',prompt:'select_account'}:{access_type:'offline',include_granted_scopes:'true',prompt:'consent select_account'}),state,code_challenge:b64url(await crypto.subtle.digest('SHA-256',encoder.encode(verifier))),code_challenge_method:'S256'}).forEach(([k,v])=>target.searchParams.set(k,v));
  return new Response(null,{status:302,headers:{...common,Location:target.href,'Set-Cookie':cookie(cookieName('flow',profile),flow,600,'Lax')}});
 }
 async function callback(req,env,cfg,url){
@@ -72,7 +72,7 @@ async function callback(req,env,cfg,url){
  const headers=new Headers({'Set-Cookie':cookie(cookieName('flow',flow.profile),'',0,'Lax')});
  if(url.searchParams.has('error'))return popup(cfg,flow.profile,false,'Chưa cấp quyền Google. Catalog cũ được giữ.',Object.fromEntries(headers));
  const code=url.searchParams.get('code');if(!code||code.length>4096)fail(400,'INVALID_CODE','Google chưa trả mã cấp quyền hợp lệ.');
- const {verifier}=await open(cfg,flow.verifier_cipher,'oauth-flow:'+hash);
+ const {verifier,loginOnly}=await open(cfg,flow.verifier_cipher,'oauth-flow:'+hash);
  const response=await googleFetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET,code,code_verifier:verifier,redirect_uri:cfg.origin+'/auth/callback',grant_type:'authorization_code'})});
  const tokens=await providerJson(response);if(!response.ok||!tokens.access_token)return popup(cfg,flow.profile,false,'Google chưa hoàn tất kết nối. Bấm Kết nối Google để thử lại.',Object.fromEntries(headers));
  const identityResponse=await googleFetch('https://openidconnect.googleapis.com/v1/userinfo',{headers:{Authorization:'Bearer '+tokens.access_token}}),identity=await providerJson(identityResponse);
@@ -81,6 +81,14 @@ async function callback(req,env,cfg,url){
  if(!email||!sub)return popup(cfg,flow.profile,false,'[GOOGLE_IDENTITY_INCOMPLETE] Google chưa trả đủ email hoặc mã tài khoản. Thử kết nối lại bằng tài khoản Google chính.',Object.fromEntries(headers));
  if(identity.email_verified!==true)return popup(cfg,flow.profile,false,'[GOOGLE_EMAIL_UNVERIFIED] Google chưa xác nhận email của tài khoản này. Kiểm tra tài khoản Google đã chọn.',Object.fromEntries(headers));
  if(!cfg.users[flow.profile].some(x=>x.toLowerCase()===email))return popup(cfg,flow.profile,false,'[PROFILE_EMAIL_DENIED] Email Google '+email+' không được cấp cho hồ sơ '+flow.profile+'. Chọn đúng hồ sơ và tài khoản; quản trị viên kiểm tra ALLOWED_USERS của bản đang dùng.',Object.fromEntries(headers));
+ if(loginOnly){
+  const raw=random(),csrf=random(),maxAge=cfg.sessionDays*86400,expires=now()+maxAge*1000;
+  await env.AUTH_DB.prepare('INSERT INTO app_sessions(session_hash,profile,google_sub,csrf,expires_at) VALUES(?,?,?,?,?)').bind(await digest(raw),flow.profile,sub,csrf,expires).run();
+  const proof=await seal(cfg,{raw,profile:flow.profile,sub,email,expires},'app-login:'+flow.profile);
+  const result=popup(cfg,flow.profile,true,'Đã đăng nhập. Bạn có thể quay lại Siêu Ads.');
+  result.headers.append('Set-Cookie',cookie(cookieName('flow',flow.profile),'',0,'Lax'));
+  result.headers.append('Set-Cookie',cookie(cookieName('login',flow.profile),proof,maxAge));return result;
+ }
  const scopes=new Set(String(tokens.scope||'').split(/\s+/));if(!scopes.has(SHEETS)||(flow.wants_drive&&!scopes.has(DRIVE)))return popup(cfg,flow.profile,false,'Chưa cấp đủ quyền chỉ đọc cho loại nguồn đã chọn.',Object.fromEntries(headers));
  const prior=await env.AUTH_DB.prepare('SELECT * FROM google_connections WHERE profile=? AND google_sub=?').bind(flow.profile,sub).first();
  const previous=prior?await open(cfg,prior.token_cipher,aad(flow.profile,sub)):{};
@@ -100,6 +108,23 @@ async function session(req,env,cfg,profile){const raw=readCookie(req,cookieName(
  const s=await env.AUTH_DB.prepare('SELECT * FROM app_sessions WHERE session_hash=? AND profile=? AND expires_at>?').bind(await digest(raw),profile,now()).first();if(!s)fail(401,'CONNECT_REQUIRED','Phiên Siêu Ads đã hết hạn. Kết nối Google để tiếp tục.');
  const connection=await env.AUTH_DB.prepare('SELECT * FROM google_connections WHERE profile=? AND google_sub=?').bind(profile,s.google_sub).first();
  if(!connection||!cfg.users[profile]?.some(x=>x.toLowerCase()===connection.email))fail(401,'CONNECT_REQUIRED','Kết nối không còn được cấp quyền cho hồ sơ này.');return {...s,connection};
+}
+async function loginSession(req,env,cfg,profile){
+ const raw=readCookie(req,cookieName('login',profile));if(!raw||raw.length>4096)fail(401,'LOGIN_REQUIRED','Đăng nhập để vào chương trình.');
+ let proof;try{proof=await open(cfg,raw,'app-login:'+profile);}catch{fail(401,'LOGIN_REQUIRED','Phiên đăng nhập không còn hợp lệ.');}
+ if(proof.profile!==profile||typeof proof.raw!=='string'||!/^[a-f0-9]{64}$/.test(proof.raw)||typeof proof.sub!=='string'||!Number.isFinite(proof.expires)||proof.expires<=now()||!cfg.users[profile]?.some(x=>x.toLowerCase()===proof.email))fail(401,'LOGIN_REQUIRED','Phiên đăng nhập không còn được cấp quyền.');
+ const record=await env.AUTH_DB.prepare('SELECT * FROM app_sessions WHERE session_hash=? AND profile=? AND expires_at>?').bind(await digest(proof.raw),profile,now()).first();
+ if(!record||record.google_sub!==proof.sub||record.expires_at!==proof.expires)fail(401,'LOGIN_REQUIRED','Phiên đăng nhập đã hết hạn.');
+ return {...record,email:proof.email};
+}
+async function accessSession(req,env,cfg,profile){
+ if(readCookie(req,cookieName('login',profile))){try{return await loginSession(req,env,cfg,profile);}catch(error){if(error.status!==401)throw error;}}
+ const s=await session(req,env,cfg,profile);return {...s,email:s.connection.email};
+}
+async function currentAccess(req,env,cfg,url){
+ const selected=url.searchParams.get('profile'),profiles=selected?[profileOf(url,cfg)]:Object.keys(cfg.users);
+ for(const profile of profiles){try{return await accessSession(req,env,cfg,profile);}catch(error){if(error.status!==401)throw error;}}
+ fail(401,'LOGIN_REQUIRED','Đăng nhập để vào chương trình.');
 }
 async function invalidate(env,connection){await env.AUTH_DB.batch([env.AUTH_DB.prepare('DELETE FROM app_sessions WHERE profile=? AND google_sub=? AND EXISTS(SELECT 1 FROM google_connections WHERE profile=? AND google_sub=? AND version=?)').bind(connection.profile,connection.google_sub,connection.profile,connection.google_sub,connection.version),env.AUTH_DB.prepare('DELETE FROM google_connections WHERE profile=? AND google_sub=? AND version=?').bind(connection.profile,connection.google_sub,connection.version)]);}
 async function access(env,cfg,connection,force=false){
@@ -149,18 +174,19 @@ async function disconnect(req,env,cfg,url){const profile=profileOf(url,cfg),s=aw
  return json({ok:true},200,{'Set-Cookie':cookie(cookieName('session',profile),'',0)});
 }
 async function logout(req,env,cfg,url){
- const profile=profileOf(url,cfg),s=await session(req,env,cfg,profile);sameOrigin(req,cfg,s.csrf);
+ const profile=profileOf(url,cfg),s=await accessSession(req,env,cfg,profile);sameOrigin(req,cfg,s.csrf);
  // Log out only this browser's sessions. Keep encrypted Google grants for reconnection.
- const deletes=[];for(const p of Object.keys(cfg.users)){const raw=readCookie(req,cookieName('session',p));if(/^[a-f0-9]{64}$/.test(raw))deletes.push(env.AUTH_DB.prepare('DELETE FROM app_sessions WHERE session_hash=? AND profile=?').bind(await digest(raw),p));}
+ const deletes=[];for(const p of Object.keys(cfg.users)){const raw=readCookie(req,cookieName('session',p));if(/^[a-f0-9]{64}$/.test(raw))deletes.push(env.AUTH_DB.prepare('DELETE FROM app_sessions WHERE session_hash=? AND profile=?').bind(await digest(raw),p));if(readCookie(req,cookieName('login',p))){try{const identity=await loginSession(req,env,cfg,p);deletes.push(env.AUTH_DB.prepare('DELETE FROM app_sessions WHERE session_hash=? AND profile=?').bind(identity.session_hash,p));}catch(error){if(error.status!==401)throw error;}}}
  if(deletes.length)await env.AUTH_DB.batch(deletes);
- const result=json({ok:true});for(const p of Object.keys(cfg.users))result.headers.append('Set-Cookie',cookie(cookieName('session',p),'',0));return result;
+ const result=json({ok:true});for(const p of Object.keys(cfg.users))for(const kind of ['session','login'])result.headers.append('Set-Cookie',cookie(cookieName(kind,p),'',0));return result;
 }
 export default {async fetch(req,env){const url=new URL(req.url);
  try{const cfg=config(env);if(url.origin!==cfg.origin)fail(403,'ORIGIN_DENIED','Backend chưa được cấu hình cho địa chỉ này.');
-  if(!url.pathname.startsWith('/auth/'))return await application(req,env,cfg,{common,cookieName,readCookie,session,fail,loginNonce:()=>b64url(bytes(16))});
+  if(!url.pathname.startsWith('/auth/'))return await application(req,env,cfg,{common,cookieName,readCookie,session:accessSession,fail,loginNonce:()=>b64url(bytes(16))});
   if(url.pathname==='/auth/config'&&req.method==='GET')return json({enabled:true,clientId:env.GOOGLE_CLIENT_ID,profiles:Object.keys(cfg.users)});
   if(url.pathname==='/auth/start'&&req.method==='GET')return await start(req,env,cfg,url);
   if(url.pathname==='/auth/callback'&&req.method==='GET')return await callback(req,env,cfg,url);
+  if(url.pathname==='/auth/access'&&req.method==='GET'){const s=await currentAccess(req,env,cfg,url);return json({connected:true,profile:s.profile,email:s.email,until:s.expires_at,csrf:s.csrf});}
   if(url.pathname==='/auth/session'&&req.method==='GET'){const p=profileOf(url,cfg),s=await session(req,env,cfg,p);return json({connected:true,profile:p,email:s.connection.email,excel:!!s.connection.has_drive,until:s.expires_at,csrf:s.csrf});}
   if(url.pathname==='/auth/read'&&req.method==='POST')return await proxy(req,env,cfg,url);
   if(url.pathname==='/auth/disconnect'&&req.method==='POST')return await disconnect(req,env,cfg,url);

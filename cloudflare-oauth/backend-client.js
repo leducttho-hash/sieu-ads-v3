@@ -1,6 +1,6 @@
 /* Same-origin broker adapter. Stores session summaries only in memory; no Google tokens. */
 window.SieuGoogleBackend=(()=>{
- 'use strict';const cache=new Map(),active=new Set(),bodyLeases=new Map();let configuration=null,problem='',pending=null,generation=0;
+ 'use strict';const cache=new Map(),active=new Set(),bodyLeases=new Map();let configuration=null,problem='',pending=null,generation=0,viewer=null;
  const abortError=()=>new DOMException('Đã hủy kết nối Google.','AbortError');
  const endpoint=(path,profile)=>'/auth/'+path+(profile?'?profile='+encodeURIComponent(profile):'');
  async function api(path,{profile,method='GET',body,csrf,signal,keepAlive=false}={}){
@@ -10,10 +10,10 @@ window.SieuGoogleBackend=(()=>{
   }catch(e){if(e.name==='AbortError')throw e;if(e instanceof TypeError)throw Error('Chưa kết nối được backend Google. Catalog cũ được giữ.');throw e;}finally{if(!held)cleanup();}
  }
  async function session(profile){try{const response=await api('session',{profile}),value=await response.json();if(value.profile!==profile||!value.connected||!value.csrf)throw Error('Phiên backend chưa hợp lệ.');cache.set(profile,value);return value;}catch(e){cache.delete(profile);throw e;}}
- const ready=(async()=>{try{const response=await api('config'),value=await response.json();if(!value.enabled||!Array.isArray(value.profiles))throw Error('Backend chưa sẵn sàng.');configuration=value;await Promise.all(value.profiles.map(p=>session(p).catch(()=>null)));}catch(e){problem=e.message;}})();
+ const ready=(async()=>{try{const response=await api('config'),value=await response.json();if(!value.enabled||!Array.isArray(value.profiles))throw Error('Backend chưa sẵn sàng.');configuration=value;await Promise.all(value.profiles.map(p=>session(p).catch(()=>null)));try{viewer=await (await api('access')).json();}catch(error){if(error.status!==401)throw error;}}catch(e){problem=e.message;}})();
  function status(profile){const value=cache.get(profile);if(!value||value.until<=Date.now()){cache.delete(profile);return null;}return {email:value.email,excel:value.excel,until:value.until};}
  function abort(){generation++;for(const task of active)task.abort();active.clear();for(const cleanup of bodyLeases.values())cleanup();bodyLeases.clear();if(pending){pending.cancel();pending=null;}}
- function forget(){abort();cache.clear();}
+ function forget(){abort();cache.clear();viewer=null;}
  function connect({profile,excel=false}){
   if(!configuration)return Promise.reject(Error(problem||'Backend đang tải. Đợi một chút rồi thử lại.'));
   if(!configuration.profiles.includes(profile))return Promise.reject(Error('Hồ sơ chưa được cấu hình trên backend thử nghiệm.'));
@@ -34,9 +34,9 @@ window.SieuGoogleBackend=(()=>{
   const all=new Uint8Array(count);let offset=0;for(const chunk of parts){all.set(chunk,offset);offset+=chunk.length;}if(binary)return all.buffer;try{return JSON.parse(new TextDecoder().decode(all));}catch{throw Error('Nguồn chưa trả dữ liệu hợp lệ. Catalog cũ được giữ.');}}finally{bodyLeases.get(response)?.();bodyLeases.delete(response);}
  }
  async function disconnect(ctx){const value=cache.get(ctx.profile);if(!value)return;await api('disconnect',{profile:ctx.profile,method:'POST',csrf:value.csrf,body:{}});cache.delete(ctx.profile);}
- async function logout(){await ready;if(!configuration)throw Error(problem||'Chưa kiểm tra được phiên đăng nhập.');for(const profile of configuration.profiles){try{const value=status(profile)?cache.get(profile):await session(profile);await api('logout',{profile,method:'POST',csrf:value.csrf,body:{}});forget();return;}catch(error){if(error.status!==401)throw error;}}forget();}
+ async function logout(){await ready;if(!configuration)throw Error(problem||'Chưa kiểm tra được phiên đăng nhập.');try{const current=await (await api('access')).json();await api('logout',{profile:current.profile,method:'POST',csrf:current.csrf,body:{}});}catch(error){if(error.status!==401)throw error;}forget();}
  // Delegated so the header may be rebuilt without reconnecting handlers or polling.
  document.addEventListener('click',async event=>{const button=event.target.closest?.('[data-pilot-logout]');if(!button)return;event.preventDefault();event.stopImmediatePropagation();if(button.disabled)return;button.disabled=true;const status=document.getElementById('pilot-logout-status');if(status)status.textContent='Đang đăng xuất…';try{await logout();location.replace('/login');}catch(error){button.disabled=false;if(status)status.textContent=error.message||'Chưa đăng xuất được.';}},true);
  window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();});
- return {enabled:true,ready,logout,get profiles(){return [...cache.keys()].filter(p=>status(p));},get clientId(){return configuration?.clientId||'';},get problem(){return problem;},status,connect,ensure,request,disconnect,forget,abort,account:async ctx=>(await session(ctx.profile)).email};
+ return {enabled:true,ready,logout,get profiles(){return [...new Set([...(viewer?.until>Date.now()?[viewer.profile]:[]),...[...cache.keys()].filter(p=>status(p))])];},get clientId(){return configuration?.clientId||'';},get problem(){return problem;},status,connect,ensure,request,disconnect,forget,abort,account:async ctx=>(await session(ctx.profile)).email};
 })();
