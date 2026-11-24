@@ -9,6 +9,36 @@ import {loginPage} from '../app-access.mjs';
 const origin='https://pilot.example.test';
 const sha=async value=>Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))).toString('hex');
 const cookie=(profile,raw)=>`__Host-sieuads_session_${profile}=${raw}`;
+
+for(const [label,setting,days,loginOnly] of [
+ ['configured app login','90',90,true],
+ ['default app login',undefined,90,true],
+ ['maximum app login','365',90,true],
+ ['explicit shorter app login','14',14,true],
+ ['source connection','90',90,false]
+]) test(`session lifetime: ${label} matches cookie and server expiry`,async()=>{
+ const f=fixture(),originalFetch=globalThis.fetch;
+ if(setting===undefined)delete f.env.SESSION_DAYS;else f.env.SESSION_DAYS=setting;
+ try{
+  const start=await f.request('/auth/start?profile=Alpha'+(loginOnly?'&login=1':''));
+  const target=new URL(start.headers.get('Location')),flowCookie=start.headers.get('Set-Cookie').split(';')[0];
+  globalThis.fetch=async url=>String(url).endsWith('/token')
+   ?Response.json({access_token:'synthetic-access',refresh_token:'synthetic-refresh',expires_in:3600,scope:'openid email https://www.googleapis.com/auth/spreadsheets.readonly'})
+   :Response.json({email:'alpha@example.test',sub:'identity-alpha',email_verified:true});
+  const before=Date.now(),response=await f.request('/auth/callback?state='+target.searchParams.get('state')+'&code=synthetic-code',{headers:{Cookie:flowCookie}}),after=Date.now();
+  assert.equal(response.status,200);
+  const prefix=`__Host-sieuads_${loginOnly?'login':'session'}_Alpha=`,issued=response.headers.getSetCookie().find(value=>value.startsWith(prefix));
+  assert(issued);assert(issued.includes(`Max-Age=${days*86400}`));
+  for(const flag of ['Secure','HttpOnly','SameSite=Strict'])assert(issued.includes(flag));
+  const expiry=f.sql.prepare('SELECT expires_at FROM app_sessions').get().expires_at;
+  assert(expiry>=before+days*86400000&&expiry<=after+days*86400000);
+  const headers={Cookie:issued.split(';')[0]},access=await(await f.request('/auth/access?profile=Alpha',{headers})).json();
+  assert.equal(access.until,expiry);
+  assert.equal(await(await f.request('/',{headers})).text(),'PRIVATE_APP_SENTINEL');
+  assert.equal(f.sql.prepare('SELECT expires_at FROM app_sessions').get().expires_at,expiry);
+  assert.equal(f.sql.prepare('SELECT count(*) AS n FROM google_connections').get().n,loginOnly?0:1);
+ }finally{globalThis.fetch=originalFetch;f.sql.close();}
+});
 function fixture(){
  const sql=new DatabaseSync(':memory:');sql.exec(readFileSync(new URL('../schema.sql',import.meta.url),'utf8'));
  const assets=[];

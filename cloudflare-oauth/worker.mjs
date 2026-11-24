@@ -32,7 +32,7 @@ function config(env){
  try{key=unb64(env.TOKEN_ENCRYPTION_KEY);}catch{fail(503,'NOT_CONFIGURED','TOKEN_ENCRYPTION_KEY không phải khóa base64url hợp lệ. Kiểm tra khóa đã lưu, không tự tạo lại khi đã có kết nối.');}
  if(key.length!==32)fail(503,'NOT_CONFIGURED','TOKEN_ENCRYPTION_KEY phải giải mã thành đúng 32 byte. Kiểm tra khóa đã lưu.');
  if(!env.AUTH_DB)fail(503,'NOT_CONFIGURED','Thiếu binding D1 AUTH_DB trong Production của Worker.');
- return {origin:origin.origin,users,key,sessionDays:Math.min(30,Math.max(1,Number(env.SESSION_DAYS)||14))};
+ return {origin:origin.origin,users,key,sessionDays:Math.min(90,Math.max(1,Number(env.SESSION_DAYS)||90))};
 }
 async function seal(cfg,value,aad){const iv=bytes(12),key=await crypto.subtle.importKey('raw',cfg.key,'AES-GCM',false,['encrypt']);const data=await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:encoder.encode(aad)},key,encoder.encode(JSON.stringify(value)));return 'v1.'+b64url(iv)+'.'+b64url(data);}
 async function open(cfg,cipher,aad){try{const [version,iv,data]=cipher.split('.');if(version!=='v1')throw Error();const key=await crypto.subtle.importKey('raw',cfg.key,'AES-GCM',false,['decrypt']);return JSON.parse(decoder.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(iv),additionalData:encoder.encode(aad)},key,unb64(data))));}catch{fail(503,'KEY_ERROR','Chưa giải mã được kết nối. Kiểm tra khóa backend; dữ liệu Kho được giữ.');}}

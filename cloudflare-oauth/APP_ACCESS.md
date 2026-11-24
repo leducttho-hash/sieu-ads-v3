@@ -18,3 +18,7 @@ Repository hiện có visibility public. Lớp đăng nhập Worker không thay 
 - 56 kiểm tra hồi quy hiện có của Pilot và hai bộ kiểm tra backend/client đã có (tổng 80 test cases).
 - DOM mô phỏng: vào đúng hồ sơ Google, không còn Tải HTML, còn nút Đăng xuất, không lỗi JavaScript.
 - Nghiệm thu live: cửa sổ chưa đăng nhập chỉ thấy màn hình đăng nhập; link asset trực tiếp bị chặn; đăng nhập đúng Google vào app; tài khoản ngoài allowlist không vào; đăng xuất rồi Back/F5 phải yêu cầu đăng nhập.
+
+## Thời hạn phiên 90 ngày
+
+SESSION_DAYS đặt thành 90; server cho phép tối đa 90 ngày và mặc định 90 ngày. Cả cookie đăng nhập và hạn phiên server được cấp cùng thời hạn, tính từ lần đăng nhập/kết nối mới; không tự cộng thêm khi mở app. Các phiên đã cấp trước bản này giữ hạn cũ, cần đăng xuất rồi đăng nhập lại một lần để nhận đủ 90 ngày. Đăng xuất/gỡ email khỏi allowlist vẫn có hiệu lực như trước; không đổi Google scopes, token refresh, schema hoặc dữ liệu công việc.
