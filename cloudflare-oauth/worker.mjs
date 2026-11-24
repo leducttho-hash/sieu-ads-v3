@@ -1,3 +1,4 @@
+import {application} from './app-access.mjs';
 /** Same-origin OAuth pilot. No OAuth credentials are returned to the browser or logged. */
 const SHEETS='https://www.googleapis.com/auth/spreadsheets.readonly';
 const DRIVE='https://www.googleapis.com/auth/drive.readonly';
@@ -147,14 +148,23 @@ async function disconnect(req,env,cfg,url){const profile=profileOf(url,cfg),s=aw
  const others=await env.AUTH_DB.prepare('SELECT * FROM google_connections WHERE google_sub=?').bind(s.google_sub).all();for(const c of others.results)await invalidate(env,c);
  return json({ok:true},200,{'Set-Cookie':cookie(cookieName('session',profile),'',0)});
 }
-export default {async fetch(req,env){const url=new URL(req.url);if(!url.pathname.startsWith('/auth/'))return env.ASSETS.fetch(req);
+async function logout(req,env,cfg,url){
+ const profile=profileOf(url,cfg),s=await session(req,env,cfg,profile);sameOrigin(req,cfg,s.csrf);
+ // Log out only this browser's sessions. Keep encrypted Google grants for reconnection.
+ const deletes=[];for(const p of Object.keys(cfg.users)){const raw=readCookie(req,cookieName('session',p));if(/^[a-f0-9]{64}$/.test(raw))deletes.push(env.AUTH_DB.prepare('DELETE FROM app_sessions WHERE session_hash=? AND profile=?').bind(await digest(raw),p));}
+ if(deletes.length)await env.AUTH_DB.batch(deletes);
+ const result=json({ok:true});for(const p of Object.keys(cfg.users))result.headers.append('Set-Cookie',cookie(cookieName('session',p),'',0));return result;
+}
+export default {async fetch(req,env){const url=new URL(req.url);
  try{const cfg=config(env);if(url.origin!==cfg.origin)fail(403,'ORIGIN_DENIED','Backend chưa được cấu hình cho địa chỉ này.');
+  if(!url.pathname.startsWith('/auth/'))return await application(req,env,cfg,{common,cookieName,readCookie,session,fail,loginNonce:()=>b64url(bytes(16))});
   if(url.pathname==='/auth/config'&&req.method==='GET')return json({enabled:true,clientId:env.GOOGLE_CLIENT_ID,profiles:Object.keys(cfg.users)});
   if(url.pathname==='/auth/start'&&req.method==='GET')return await start(req,env,cfg,url);
   if(url.pathname==='/auth/callback'&&req.method==='GET')return await callback(req,env,cfg,url);
   if(url.pathname==='/auth/session'&&req.method==='GET'){const p=profileOf(url,cfg),s=await session(req,env,cfg,p);return json({connected:true,profile:p,email:s.connection.email,excel:!!s.connection.has_drive,until:s.expires_at,csrf:s.csrf});}
   if(url.pathname==='/auth/read'&&req.method==='POST')return await proxy(req,env,cfg,url);
   if(url.pathname==='/auth/disconnect'&&req.method==='POST')return await disconnect(req,env,cfg,url);
+  if(url.pathname==='/auth/logout'&&req.method==='POST')return await logout(req,env,cfg,url);
   fail(405,'METHOD_DENIED','Thao tác chưa được hỗ trợ.');
  }catch(error){if(error instanceof SafeError)return json({ok:false,error:error.code,message:error.message},error.status);return json({ok:false,error:'BACKEND_ERROR',message:'Backend chưa xử lý được yêu cầu. Catalog cũ được giữ.'},503);}
 }};

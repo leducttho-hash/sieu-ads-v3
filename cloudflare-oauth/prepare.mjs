@@ -20,11 +20,15 @@ replace('async function disconnect(ctx){','async function disconnect(ctx){if(win
 replace('  restoreSessions();','  if(!window.SieuGoogleBackend?.enabled)restoreSessions();');
 html=html.replace(connector[0],'<script src="/backend-client.js"></script>\n<script '+connector[1]+'>'+code+'</script>');
 if(!html.includes('(async()=>{await initDisk();'))throw Error('Application startup changed');
-html=html.replace('(async()=>{await initDisk();','(async()=>{await window.SieuGoogleBackend.ready;await initDisk();if(window.SieuGoogleBackend.clientId)db.oauthClientId=window.SieuGoogleBackend.clientId;');
+html=html.replace('(async()=>{await initDisk();','(async()=>{await window.SieuGoogleBackend.ready;await initDisk();if(window.SieuGoogleBackend.clientId)db.oauthClientId=window.SieuGoogleBackend.clientId;const signedProfiles=window.SieuGoogleBackend.profiles||[];if(signedProfiles.length&&!signedProfiles.includes(db.session.user)){const signedProfile=signedProfiles.find(p=>db.users.some(u=>u.id===p));if(signedProfile)switchScope("user",signedProfile);}');
 html=html.replace(' const cfg=db.warehouseSheetSync[sk];',' const cfg=db.warehouseSheetSync[sk];if(window.SieuGoogleBackend.clientId)cfg.oauthClientId=window.SieuGoogleBackend.clientId;');
 html=html.replace('id="sync-oauth-client-id"','id="sync-oauth-client-id" readonly title="Client ID được quản lý trên backend thử nghiệm"');
 html=html.replace('Đã kết nối · giữ phiên khi đổi Kho và tải lại tab.','Đã kết nối · tự gia hạn qua backend.');
 html=html.replace('Giữ kết nối trong tab này; không đưa token vào Backup.','Quyền gia hạn được mã hóa trên backend; không đưa token vào HTML hoặc Backup.');
+// Pilot access controls: remove the downloadable offline bundle from this build.
+const downloadLink='<a class="btn" href="./index.html" download="SieuAds-v3.html" data-review-download>Tải HTML</a>';
+if(html.split(downloadLink).length!==2)throw Error('Pilot HTML download hook changed');
+html=html.replace(downloadLink,'<button type="button" class="btn" data-pilot-logout>Đăng xuất</button><span id="pilot-logout-status" role="status" aria-live="polite"></span>');
 // Isolated CRM input adapter: root index and all existing report rules stay untouched.
 const crmAddon=await readFile(resolve(here,'crm-api-panel.js'),'utf8');
 function crmReplace(old,value){if(html.split(old).length!==2)throw Error('CRM hook changed or ambiguous: '+old.slice(0,80));html=html.replace(old,value);}
