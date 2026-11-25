@@ -9,10 +9,24 @@ function pilotPageTypeLabel(value,labels=[]){
   const full=String(value??'').trim(),short=pilotPageTypeShort(full);
   return labels.some(label=>String(label).trim()!==full&&pilotPageTypeShort(label)===short)?full:short;
 }
+function pilotPageSelectedTypes(select,reg=registry()){
+  const cell=select.closest?.('td'),control=cell?pilotPageTypeSelect(cell,select):null;
+  // A visible, explicitly cleared type selector means "all eligible types".
+  if(control)return control.value?[control.value]:[];
+  let item;try{const row=JSON.parse(decodeURIComponent(select.dataset.row||''));item=compute().find(item=>item.id===row);}catch{}
+  if(item?.pageSelection?.pageTypeId)return [item.pageSelection.pageTypeId];
+  const selected=reg.pages.find(page=>page.pageId===select.value),types=selected?C.registryPageTypeIds(selected).filter(id=>reg.pageTypes.some(type=>type.typeId===id&&type.isActive)):[];
+  if(types.length===1)return types;
+  return item?profileSourcePageTypes(item,reg).map(type=>type.typeId):[];
+}
 function pilotPageAllowedOptions(select){
-  const pages=registry().pages;
-  return Array.from(select.options).filter(option=>!option.disabled&&!option.hidden).map(option=>{
-    const page=pages.find(page=>page.pageId===option.value);
+  const reg=registry(),types=pilotPageSelectedTypes(select,reg),active=new Set(reg.pageTypes.filter(type=>type.isActive).map(type=>type.typeId));
+  return Array.from(select.options).filter(option=>{
+    if(option.disabled||option.hidden)return false;if(!option.value)return true;
+    const page=reg.pages.find(page=>page.pageId===option.value);
+    return !!page&&page.isActive!==false&&(!types.length||C.registryPageTypeIds(page).some(id=>active.has(id)&&types.includes(id)));
+  }).map(option=>{
+    const page=reg.pages.find(page=>page.pageId===option.value);
     return {value:option.value,label:option.textContent.trim(),name:page?.name||option.textContent.trim(),id:option.value};
   });
 }
@@ -49,7 +63,8 @@ function pilotPageChoose(index){
   const state=pilotPagePopup;if(!pilotPageCurrent(state)){pilotPageClose();return;}
   const option=state.shown[index];if(!option)return;
   // Check the live native option again; the popup cannot introduce another Page or expand eligibility.
-  const native=Array.from(state.select.options).find(item=>item.value===option.value&&!item.disabled&&!item.hidden);if(!native){pilotPageClose(true);return;}
+  const native=Array.from(state.select.options).find(item=>item.value===option.value&&!item.disabled&&!item.hidden);
+  if(!native||!pilotPageAllowedOptions(state.select).some(item=>item.value===option.value)){pilotPageClose(true);return;}
   const value=state.select.value,row=state.select.dataset.row,scope=state.scope;pilotPageClose();
   if(value!==native.value){state.select.value=native.value;state.select.dispatchEvent(new Event('change',{bubbles:true}));}
   const button=Array.from(document.querySelectorAll('[data-pilot-page-trigger]')).find(button=>button.dataset.row===row);
