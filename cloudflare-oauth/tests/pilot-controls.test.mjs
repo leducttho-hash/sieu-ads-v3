@@ -115,8 +115,8 @@ test('source and channel indicators use existing selections and keyboard trigger
   f.events.keydown({target:a,key:'ArrowRight',ctrlKey:true,preventDefault(){throw Error('must not intercept shortcuts');}});assert.equal(switched,1);
  }finally{f.dispose();}
 });
-test('build adds only guarded Pilot hooks; core export logic and offline root stay at the accepted baseline',()=>{
- const root=readFileSync(new URL('../../index.html',import.meta.url));const sha=createHash('sha1').update('blob '+root.byteLength+'\0').update(root).digest('hex');assert.equal(sha,'e66ccb6536eb65589ab85537915d2a806cbb4bad');
+test('build adds only guarded Pilot hooks; the root stays at the reviewed suffix-fix baseline',()=>{
+ const root=readFileSync(new URL('../../index.html',import.meta.url));const sha=createHash('sha1').update('blob '+root.byteLength+'\0').update(root).digest('hex');assert.equal(sha,'22fec473fb5c5900a0e2b4bed9bd14035807d1ab');
  const prepare=readFileSync(new URL('../prepare.mjs',import.meta.url),'utf8');assert(prepare.includes('pilot-controls.css'));assert(prepare.includes('pilotFeedbackClipboardWrite'));assert(prepare.includes('crmReplace('));
  const css=readFileSync(new URL('../pilot-controls.css',import.meta.url),'utf8');assert(css.includes('body.reduced-motion'));assert(css.includes('prefers-reduced-motion:reduce'));assert(!css.includes(':root'));assert(!source.includes('fetch('));assert(!source.includes('setInterval('));
 });

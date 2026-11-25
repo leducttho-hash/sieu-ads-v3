@@ -3255,20 +3255,31 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   function resolveContentSuffix(rawContent, rules = []) {
     const errors = validateContentSuffixRules(rules);
     if (errors.length) return { suffix: "", errors };
-    const markers = new Set(Array.from(String(rawContent ?? "").normalize("NFKC").matchAll(/\(([^()]*)\)/g), (match) => markerKey(match[1])));
-    const suffixes = [...new Set(rules.filter((rule) => rule?.active && markers.has(markerKey(rule.marker))).map((rule) => rule.suffix.trim().toUpperCase()))];
+    const text = contentAnnotationText(rawContent), markers = new Set(Array.from(text.matchAll(/\(([^()]*)\)/g), (match) => markerKey(match[1])));
+    const outside = text.replace(/^\s*[^\s(]+/, "").replace(/\([^()]*\)/g, " ");
+    const suffixes = [...new Set(rules.filter((rule) => rule?.active && (markers.has(markerKey(rule.marker)) || contentMarkerPattern(rule.marker).test(outside))).map((rule) => rule.suffix.trim().toUpperCase()))];
     if (suffixes.length > 1) {
       return { suffix: "", errors: ["M\xE3 c\xF3 nhi\u1EC1u d\u1EA5u hi\u1EC7u trong ngo\u1EB7c quy \u0111\u1ED5i ra c\xE1c \u0111u\xF4i kh\xE1c nhau. Ch\u1EC9 gi\u1EEF m\u1ED9t quy \u0111\u1ED5i cho d\xF2ng n\xE0y."] };
     }
     return { suffix: suffixes[0] || "", errors: [] };
   }
+  function contentAnnotationText(value) {
+    return String(value ?? "").normalize("NFKC").replace(/[\u200B-\u200D\u2060\uFEFF]/g, "");
+  }
+  function contentMarkerPattern(marker, global = false) {
+    const escaped = markerKey(marker).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp("(^|[^\\p{L}\\p{N}_])" + escaped + "(?=$|[^\\p{L}\\p{N}_])[.,;:!?]*", global ? "giu" : "iu");
+  }
   function stripMappedContentAnnotations(value, rules = []) {
     if (!Array.isArray(rules)) return String(value ?? "");
     const markers = new Set(rules.filter((rule) => rule?.active).map((rule) => markerKey(rule.marker)));
-    return String(value ?? "").normalize("NFKC").replace(
-      /\(([^()]*)\)/g,
-      (whole, marker) => markers.has(markerKey(marker)) ? "" : whole
-    ).trim();
+    const text = contentAnnotationText(value), source = text.match(/^\s*[^\s(]+/)?.[0] || "";
+    const tail = text.slice(source.length).replace(/\(([^()]*)\)|[^()]+/g, (whole, marker) => {
+      if (marker !== undefined) return markers.has(markerKey(marker)) ? "" : whole;
+      for (const known of markers) if (known) whole = whole.replace(contentMarkerPattern(known, true), "$1");
+      return whole;
+    });
+    return (source + tail).trim();
   }
   function contentIdentityWithSuffix(identity, rawContent, rules = []) {
     const { suffix, errors } = resolveContentSuffix(rawContent, rules);
@@ -9143,9 +9154,15 @@ function getNormEngines(rows){
   return e;
 }
 function cdLinkCode(value,markerSource=value){
-  const normalized=C.canonicalizeAdsContentIdentity(value,markerSource),raw=C.extractMetaReportCodeRaw(normalized,'cd')||normalized;
+  const cfg=user().config||{},raw=C.extractMetaReportCodeRaw(value,'cd')||value,evidence=markerSource===value?raw:markerSource;
+  const seasonal=cfg.campaignNameConfig?.seasonalRulesByWarehouse?seasonalResolve(evidence,seasonalRules(cfg)):null;
+  if(seasonal?.errors.length)return '';
+  const lookup=seasonal?.matched?seasonalLookupRaw(raw,cfg):raw;
+  const clean=C.stripMappedContentAnnotations(lookup,cfg.campaignNameConfig?.contentSuffixRules);
+  let normalized=C.contentIdentityWithSuffix(C.canonicalizeAdsContentIdentity(C.extractDailyContentCode(clean),evidence),evidence,cfg.campaignNameConfig?.contentSuffixRules);
+  if(seasonal?.matched)normalized=seasonalTag(normalized,seasonal.rule.suffix);
   const base=C.superReportCdLinkCoreCode(normalized,user().reportRules||C.DEFAULT_SUPER_REPORT_CODE_FILTER);
-  return base&&/-L12(?:$|-)/i.test(raw)?base+'-L12':base;
+  return base&&/-L12(?:$|-)/i.test(normalized)?base+'-L12':base;
 }
 function dailyPermalinkCodes(row){
   const marker=row.rawContent||row.contentCode,clean=C.stripMappedContentAnnotations(row.seasonal?seasonalLookupRaw(marker,user().config):marker,user().config?.campaignNameConfig?.contentSuffixRules);
@@ -9171,7 +9188,7 @@ function cdMediaMatchesMix(media,mix){
   if(m.endsWith('8B')!==x.endsWith('8B')||!x.endsWith(m))return false;
   return /^[A-Z]{2,}[0-9]+$/.test(x.slice(0,x.length-m.length));
 }
-function resolveCdReportLinkRows(rows,metaTargets,dailyTargets){const lists=[[...new Set(metaTargets)],[...new Set(dailyTargets)]],sets=lists.map(x=>new Set(x)),cache=new Map();return rows.map(row=>{const code=cdLinkCode(row.rawName);if(!cache.has(code)){let target='';for(let i=0;i<lists.length;i++){if(sets[i].has(code)){target=code;break;}const hits=lists[i].filter(t=>cdMediaMatchesMix(code,t));if(hits.length>1)break;if(hits.length===1){target=hits[0];break;}}cache.set(code,target);}const target=cache.get(code);return target&&target!==code?{...row,rawName:target,originalRawName:row.originalRawName||row.rawName}:row;});}
+function resolveCdReportLinkRows(rows,metaTargets,dailyTargets){const lists=[[...new Set(metaTargets)],[...new Set(dailyTargets)]],sets=lists.map(x=>new Set(x)),cache=new Map();return rows.map(row=>{const code=cdLinkCode(row.rawName);if(!cache.has(code)){let target='';for(let i=0;i<lists.length;i++){if(sets[i].has(code)){target=code;break;}const hits=lists[i].filter(t=>cdMediaMatchesMix(code,t));if(hits.length>1)break;if(hits.length===1){target=hits[0];break;}}cache.set(code,target);}const target=cache.get(code);return target&&target!==row.rawName?{...row,rawName:target,originalRawName:row.originalRawName||row.rawName}:row;});}
 function filterSelectedDailyGeneratedLinks(rows,r,daily){const key=x=>cdLinkCode(x.rawName)+'\u0000'+x.permalink,owned=new Set((r.dailyGeneratedLinks||[]).map(key)),active=new Set(daily.map(x=>dailyPermalinkCodes(x)[0]));return rows.filter(row=>!owned.has(key(row))||active.has(cdLinkCode(row.rawName)));}
 function pullSelectedDailyCdLinks(r){
  const daily=compute().filter(x=>x.selected&&x.postPermalink),rows=daily.map((x,i)=>({id:'daily-'+i,rawName:dailyPermalinkCodes(x)[0],permalink:x.postPermalink,source:'Daily',row:i+1})).filter(x=>x.rawName);
@@ -10373,9 +10390,8 @@ function seasonalRuleErrors(rules){
   return [...new Set(errors)];
 }
 function seasonalResolve(raw,rules){
-  // Only standalone external tokens after the source code qualify. Parenthetical annotations stay legacy-owned.
-  const outside=seasonalKey(String(raw??'').replace(/\([^()]*\)/g,' ')).replace(/^\S+/,'');
-  const tokens=new Set(outside.match(/[\p{L}\p{N}_]+/gu)||[]),hits=rules.filter(rule=>rule?.active&&tokens.has(seasonalKey(rule.marker)));
+  // Use the same configured-marker grammar for parenthetical and standalone annotations.
+  const hits=rules.filter(rule=>rule?.active&&C.resolveContentSuffix(raw,[{...rule,suffix:'MATCH'}]).suffix==='MATCH');
   if(!hits.length)return {matched:false,rule:null,errors:[]};
   if(hits.length!==1)return {matched:true,rule:null,errors:['Dòng có nhiều rule hậu tố riêng đang bật; chỉ giữ một dấu hiệu.']};
   return {matched:true,rule:hits[0],errors:seasonalRuleErrors([hits[0]])};

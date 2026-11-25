@@ -22,10 +22,10 @@ function fixture(){
   return {ctx,cfg,rule,item,apply};
 }
 
-test('only enabled standalone external markers apply; code substrings and parenthetical rules stay ordinary',()=>{
+test('only enabled standalone configured markers apply inside/outside parentheses; code substrings stay ordinary',()=>{
   const f=fixture();
-  for(const raw of ['TUV123 (Toán KHTN)','TUV123TET (Toán)','TUV123 (TET)','TUV123 (Toán) TET2027','TUV123 (Toán) NOTET','TET123 (Toán)'])assert(!f.ctx.seasonalResolve(raw,[f.rule]).matched,raw);
-  for(const raw of ['TUV123 (Toán KHTN) TET','TUV123 (KHTN) tet.','TUV123 (Toán) ＴＥＴ','TUV123 (Toán) TET TET'])assert(f.ctx.seasonalResolve(raw,[f.rule]).matched,raw);
+  for(const raw of ['TUV123 (Toán KHTN)','TUV123TET (Toán)','TUV123 (Toán) TET2027','TUV123 (Toán) NOTET','TET123 (Toán)'])assert(!f.ctx.seasonalResolve(raw,[f.rule]).matched,raw);
+  for(const raw of ['TUV123 (TET)','TUV123 (Toán) (TET)','TUV123 (Toán KHTN) TET','TUV123 (KHTN) tet.','TUV123 (Toán) ＴＥＴ','TUV123 (Toán) TET TET'])assert(f.ctx.seasonalResolve(raw,[f.rule]).matched,raw);
   f.rule.active=false;assert(!f.apply('TUV123 (KHTN) TET').seasonal);
   f.rule.active=true;assert.equal(f.ctx.seasonalRules(f.cfg,'other').length,0);
 });
