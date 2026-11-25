@@ -40,3 +40,27 @@ test('Page adapter does not call APIs, modify registry/config or replace native 
   assert(!source.includes('fetch('));assert(!source.includes('setInterval('));assert(!source.includes('workspace()'));assert(!source.includes('pageTypeId='));assert(source.includes("dispatchEvent(new Event('change',{bubbles:true}))"));
   const prepare=readFileSync(new URL('../prepare.mjs',import.meta.url),'utf8'),css=readFileSync(new URL('../pilot-pages.css',import.meta.url),'utf8');assert(prepare.includes("readFile(resolve(here,'pilot-pages.js')"));assert(css.includes('prefers-reduced-motion:reduce'));assert(!css.includes(':root'));
 });
+test('long Page types shorten only their displayed labels, preserving distinguishing names and original IDs/options',()=>{
+  const f=fixture(),before=JSON.stringify(f.select.options);
+  for(const [full,short]of [
+    ['Page Vuihoc/Page thầy Thọ','Vuihoc · thầy Thọ'],
+    ['Page Vuihoc (Cap no media)','Vuihoc · Không media'],
+    ['Page Vuihoc\n(Cap no media)','Vuihoc · Không media'],
+    ['Page Vuihoc\nPage cô Lan Anh','Vuihoc · cô Lan Anh'],
+    ['Page Vuihoc Page cô Lan Anh','Vuihoc · cô Lan Anh'],
+    ['QC','QC'],['PH','PH'],['Nhóm tùy chỉnh 2027','Nhóm tùy chỉnh 2027']
+  ])assert.equal(f.ctx.pilotPageTypeLabel(full),short);
+  assert.equal(JSON.stringify(f.select.options),before);
+});
+test('a display alias collision keeps the full name rather than making two types look equivalent',()=>{
+  const f=fixture(),labels=['Page Vuihoc','Vuihoc'];
+  assert.equal(f.ctx.pilotPageTypeLabel(labels[0],labels),'Page Vuihoc');
+  assert.notEqual(f.ctx.pilotPageTypeLabel(labels[0],labels),f.ctx.pilotPageTypeLabel(labels[1],labels));
+});
+test('compact fields remove letter avatars and repeated Page labels while keeping full native type options and popup names',()=>{
+  const css=readFileSync(new URL('../pilot-pages.css',import.meta.url),'utf8');
+  assert(!source.includes('pilot-page-avatar'));assert(!source.includes('<small>Page</small>'));
+  assert(css.includes('height:36px'));assert(css.includes('max-width:45%'));assert(css.includes('text-overflow:ellipsis'));
+  assert(source.includes('button.title=name'));assert(source.includes('typeBox.title=full'));assert(source.includes('type.title=full'));
+  assert(!/option\.(?:textContent|value)\s*=(?!=)/.test(source));
+});

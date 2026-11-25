@@ -2,6 +2,13 @@
  * Only Daily Page controls. The original selects/options and change handlers remain authoritative. */
 let pilotPagePopup=null,pilotPageSerial=0;
 function pilotPageSearchKey(value){return String(value??'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').replace(/Đ/g,'D').trim().toLowerCase();}
+function pilotPageTypeShort(value){
+  return String(value??'').trim().replace(/\s+Page\s+/gi,'\nPage ').split(/[\r\n/|]+/).map(part=>part.trim().replace(/^Page\s+/i,'')).filter(Boolean).join(' · ').replace(/\(\s*Cap\s+no\s+media\s*\)/gi,' · Không media').replace(/(?:\s*·\s*){2,}/g,' · ').replace(/\s+/g,' ').trim();
+}
+function pilotPageTypeLabel(value,labels=[]){
+  const full=String(value??'').trim(),short=pilotPageTypeShort(full);
+  return labels.some(label=>String(label).trim()!==full&&pilotPageTypeShort(label)===short)?full:short;
+}
 function pilotPageAllowedOptions(select){
   const pages=registry().pages;
   return Array.from(select.options).filter(option=>!option.disabled&&!option.hidden).map(option=>{
@@ -33,7 +40,7 @@ function pilotPagePaintActive(){
 function pilotPageRenderOptions(){
   const state=pilotPagePopup;if(!state)return;
   state.shown=pilotPageFilter(state.options,state.input.value);
-  state.list.innerHTML=state.shown.map((option,index)=>`<div class="pilot-page-option" id="${state.uid}-option-${index}" role="option" data-pilot-page-option="${index}" aria-selected="${option.value===state.select.value}"><span class="pilot-page-avatar" aria-hidden="true">${esc(option.value?option.name.slice(0,1).toUpperCase():'–')}</span><span class="pilot-page-option-text"><b>${esc(option.name)}</b>${option.id?`<small>ID ${esc(option.id)}</small>`:'<small>Bỏ lựa chọn Page</small>'}</span><span class="pilot-page-check" aria-hidden="true">${option.value===state.select.value?'✓':''}</span></div>`).join('')||'<p class="pilot-page-empty">Không tìm thấy Page phù hợp.</p>';
+  state.list.innerHTML=state.shown.map((option,index)=>`<div class="pilot-page-option" id="${state.uid}-option-${index}" role="option" data-pilot-page-option="${index}" aria-selected="${option.value===state.select.value}"><span class="pilot-page-option-text"><b>${esc(option.name)}</b>${option.id?`<small>ID ${esc(option.id)}</small>`:'<small>Bỏ lựa chọn Page</small>'}</span><span class="pilot-page-check" aria-hidden="true">${option.value===state.select.value?'✓':''}</span></div>`).join('')||'<p class="pilot-page-empty">Không tìm thấy Page phù hợp.</p>';
   const selected=state.shown.findIndex(option=>option.value===state.select.value);state.active=state.input.value?(state.shown.length?0:-1):selected>=0?selected:state.shown.length?0:-1;
   state.live.textContent=state.shown.length+' lựa chọn';pilotPagePosition();pilotPagePaintActive();
 }
@@ -69,19 +76,20 @@ function pilotPageDecorate(){
     if(select.closest('.pilot-page-control'))continue;
     const cell=select.closest('td');if(!cell)continue;
     const type=pilotPageTypeSelect(cell,select),status=Array.from(cell.children).find(el=>el.tagName==='SMALL'),search=cell.querySelector('[data-page-search]');
-    const selected=select.options[select.selectedIndex],name=selected?.textContent?.trim()||'Chọn Page',label=select.getAttribute('aria-label')||'Page';
+    const selected=select.options[select.selectedIndex],name=registry().pages.find(page=>page.pageId===select.value)?.name||selected?.textContent?.trim()||'Chọn Page',label=select.getAttribute('aria-label')||'Page';
     const group=document.createElement('div');group.className='pilot-page-control';cell.classList.add('pilot-page-cell');
     const button=document.createElement('button');button.type='button';button.className='pilot-page-trigger';button.dataset.pilotPageTrigger='';button.dataset.row=select.dataset.row;button.disabled=select.disabled;
     button.setAttribute('aria-label',label+': '+name);button.setAttribute('aria-haspopup','dialog');button.setAttribute('aria-expanded','false');
-    button.innerHTML=`<span class="pilot-page-avatar" aria-hidden="true">${esc(select.value?name.slice(0,1).toUpperCase():'–')}</span><span class="pilot-page-trigger-text"><small>Page</small><b>${esc(name)}</b></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>`;
+    button.title=name;button.innerHTML=`<span class="pilot-page-trigger-text">${esc(name)}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>`;
     select.classList.add('pilot-page-native');select.hidden=true;select.tabIndex=-1;select.setAttribute('aria-hidden','true');group.append(select,button);
     if(search){search.hidden=true;search.classList.add('pilot-page-native');group.append(search);}
     if(type){
-      const typeBox=document.createElement('label');typeBox.className='pilot-page-type';const caption=document.createElement('span');caption.textContent='Loại Page';
-      type.setAttribute('aria-label',label.replace(/^Page/,'Loại Page'));typeBox.append(caption,type);group.append(typeBox);
-      if(status&&status.textContent.trim()!==type.options[type.selectedIndex]?.textContent.trim()){status.classList.add('pilot-page-status');group.append(status);}else if(status){status.hidden=true;status.classList.add('pilot-page-native');}
-    }else if(status){const box=document.createElement('div');box.className='pilot-page-type-static';const caption=document.createElement('span');caption.textContent='Loại Page';box.append(caption,status);group.append(box);}
-    cell.append(group);
+      const typeBox=document.createElement('label');typeBox.className='pilot-page-type';const caption=document.createElement('span'),full=type.options[type.selectedIndex]?.textContent.trim()||'Chọn loại';
+      caption.textContent=pilotPageTypeLabel(full,Array.from(type.options,option=>option.textContent.trim()));caption.setAttribute('aria-hidden','true');typeBox.title=full;
+      type.setAttribute('aria-label',label.replace(/^Page/,'Loại Page'));type.title=full;typeBox.append(caption,type);group.append(typeBox);
+      if(status&&status.textContent.trim()!==full){status.classList.add('pilot-page-status');cell.append(status);}else if(status){status.hidden=true;status.classList.add('pilot-page-native');}
+    }else if(status){const box=document.createElement('span'),full=status.textContent.trim();box.className='pilot-page-type-static';box.title=full;box.setAttribute('aria-label','Loại Page: '+full);box.textContent=pilotPageTypeLabel(full);status.hidden=true;status.classList.add('pilot-page-native');group.append(box);}
+    cell.append(group);if(status?.classList.contains('pilot-page-status'))cell.append(status);
   }
 }
 const pilotPageOriginalRender=render;
