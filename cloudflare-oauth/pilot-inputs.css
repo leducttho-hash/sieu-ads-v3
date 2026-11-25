@@ -1,0 +1,60 @@
+/* Lucian #432, #434, #437, #449, #030 · MIT. Adapted to existing Pilot theme tokens. */
+.pilot-ui-enabled{--pilot-ui-soft:color-mix(in srgb,var(--accent) 10%,var(--surface));--pilot-ui-danger:var(--danger,#c13535)}
+.pilot-ui-enabled .pilot-ui-drop{position:relative;border-radius:12px;transition:border-color .18s,background-color .18s,box-shadow .18s;isolation:isolate}
+.pilot-ui-enabled .pilot-ui-drop:hover{border-color:color-mix(in srgb,var(--accent) 55%,var(--border))}
+.pilot-ui-enabled .pilot-ui-drop.file-drag-active{border-color:var(--accent);border-style:solid;background:var(--pilot-ui-soft);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 13%,transparent)}
+.pilot-ui-file-icon{position:absolute;top:9px;left:10px;width:17px;height:20px;color:var(--muted);pointer-events:none;transition:color .18s,translate .18s}
+.pilot-ui-file-icon svg{display:block;width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.file-drag-active .pilot-ui-file-icon{color:var(--accent);translate:0 -2px}
+.pilot-ui-file-status{font-size:11px;line-height:1.5;max-width:100%;overflow-wrap:anywhere;text-align:center;color:var(--muted);padding-inline:8px}
+.pilot-ui-file-status[hidden]{display:none}
+[data-pilot-upload="busy"] .pilot-ui-file-icon{color:var(--accent);animation:pilot-ui-file-pulse .9s ease-in-out infinite alternate}
+[data-pilot-upload="error"] .pilot-ui-file-status{color:var(--pilot-ui-danger)}
+[data-pilot-upload="done"] .pilot-ui-file-status::before{content:"✓ ";color:#128363;font-weight:700}
+.pilot-ui-enabled #content .source-line{min-width:0;overflow-wrap:anywhere}
+.pilot-ui-enabled #content .source-line>div:first-child{min-width:0;line-height:1.5}
+.pilot-ui-enabled :is(#content,#modal) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),textarea,select){transition:border-color .16s,box-shadow .16s}
+.pilot-ui-enabled :is(#content,#modal) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),textarea,select):focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 10%,transparent)}
+.pilot-ui-enabled :is(#content,#modal) :is([aria-invalid="true"],.pilot-ui-native-invalid){border-color:var(--pilot-ui-danger);box-shadow:0 0 0 2px color-mix(in srgb,var(--pilot-ui-danger) 13%,transparent)}
+.pilot-ui-tooltip{position:fixed;z-index:10060;box-sizing:border-box;max-width:min(280px,calc(100vw - 16px));padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--text);color:var(--surface);box-shadow:0 6px 18px #0002;font-size:12px;line-height:1.45;overflow-wrap:anywhere;animation:pilot-ui-tooltip-in .14s ease-out}
+.pilot-ui-tooltip::after{content:"";position:absolute;left:calc(50% - 3px);width:6px;height:6px;background:inherit;rotate:45deg}
+.pilot-ui-tooltip[data-side="above"]::after{bottom:-3px}.pilot-ui-tooltip[data-side="below"]::after{top:-3px}
+.pilot-ui-pager{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+.pilot-ui-pager>.actions{gap:8px;flex-wrap:wrap;max-width:100%}
+.pilot-ui-page-count{color:var(--muted);font-size:12px}.pilot-ui-page-count b{color:var(--text);font-weight:600}
+.pilot-ui-pages{display:flex;align-items:center;gap:3px;padding:3px;border:1px solid var(--border);border-radius:10px;background:var(--surface);max-width:100%;box-sizing:border-box}
+.pilot-ui-page-slots{display:flex;gap:2px;align-items:center}
+.pilot-ui-pages .pilot-ui-page,.pilot-ui-page-dots{display:grid;place-items:center;flex:0 0 27px;width:27px;min-width:27px;height:29px;min-height:29px;padding:0;border:0;border-radius:7px;background:transparent;color:var(--muted);font-size:12px;line-height:1;box-sizing:border-box;transition:background-color .15s,color .15s}
+.pilot-ui-pages .pilot-ui-page:hover:not(:disabled):not([aria-current]){background:var(--pilot-ui-soft);color:var(--text)}
+.pilot-ui-pages .pilot-ui-page[aria-current="page"]{background:var(--text);color:var(--surface);font-weight:650;animation:pilot-ui-page-in .18s ease-out}
+.pilot-ui-pages .pilot-ui-page:disabled{opacity:.28;cursor:default}.pilot-ui-pages .pilot-ui-page:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.pilot-ui-page svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.pilot-ui-page-prev svg{rotate:180deg}
+#crm-api-panel .crm-api-preview-pager.pilot-ui-pager{padding:7px 8px;gap:6px;min-height:44px;justify-content:flex-end}
+#crm-api-panel .crm-api-preview-pager.pilot-ui-pager>span:first-child{margin-right:auto;font-size:11px}
+#crm-api-panel .pilot-ui-pages .pilot-ui-page{padding:0;min-height:27px;height:27px;font-size:11px}
+#crm-api-range-popup.pilot-ui-calendar{border-radius:17px;padding:14px;box-shadow:0 14px 44px #0002}
+.pilot-ui-date-pills{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.pilot-ui-date-pills>div{padding:9px 12px;border-radius:10px;background:color-mix(in srgb,var(--text) 4%,var(--surface));border:1px solid transparent;min-width:0}
+.pilot-ui-date-pills>div.on{border-color:var(--accent);background:var(--pilot-ui-soft)}
+.pilot-ui-date-pills small{display:block;color:var(--muted);font-size:11px;margin-bottom:3px}.pilot-ui-date-pills b{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+#crm-api-range-popup.pilot-ui-calendar .crm-range-toolbar{font-size:11px;color:var(--muted);margin-bottom:8px}
+#crm-api-range-popup.pilot-ui-calendar .crm-range-toolbar .btn{border-radius:8px;width:30px;height:30px;padding:0}
+#crm-api-range-popup.pilot-ui-calendar .crm-range-month h3{margin:3px 0 11px;font-size:13px;font-weight:650}
+#crm-api-range-popup.pilot-ui-calendar .crm-range-week{font-weight:600;margin-bottom:7px}
+#crm-api-range-popup.pilot-ui-calendar .crm-range-grid{gap:3px 0}
+#crm-api-range-popup.pilot-ui-calendar .crm-range-day{position:relative;border-radius:0;min-height:32px;transition:background-color .12s;outline-offset:-2px}
+#crm-api-range-popup.pilot-ui-calendar .crm-range-day:hover:not(:disabled){background:var(--pilot-ui-soft)}
+#crm-api-range-popup.pilot-ui-calendar .crm-range-day.in-range,#crm-api-range-popup.pilot-ui-calendar .crm-range-day[data-pilot-range-preview]{background:var(--pilot-ui-soft);opacity:1}
+#crm-api-range-popup.pilot-ui-calendar .crm-range-day[data-pilot-range-start]{border-radius:9px 0 0 9px}
+#crm-api-range-popup.pilot-ui-calendar .crm-range-day[data-pilot-range-end]{border-radius:0 9px 9px 0}
+#crm-api-range-popup.pilot-ui-calendar .crm-range-day[data-pilot-range-start][data-pilot-range-end]{border-radius:9px}
+#crm-api-range-popup.pilot-ui-calendar .crm-range-day.selected{background:var(--accent);color:white;z-index:1}
+#crm-api-range-popup.pilot-ui-calendar .crm-range-day[aria-current="date"]::after{content:"";position:absolute;left:calc(50% - 2px);bottom:3px;width:4px;height:4px;border-radius:50%;background:currentColor}
+#crm-api-range-popup.pilot-ui-calendar .crm-range-day:focus-visible{outline:2px solid var(--accent);outline-offset:1px;z-index:2}
+#crm-api-range-popup.pilot-ui-calendar .crm-range-footer{font-variant-numeric:tabular-nums;flex-wrap:wrap;gap:8px}
+#crm-api-range-popup.pilot-ui-calendar .crm-range-footer .btn{border-radius:8px}
+@media(max-width:600px){.pilot-ui-pages .pilot-ui-page,.pilot-ui-page-dots{flex-basis:23px;width:23px;min-width:23px;font-size:11px}.pilot-ui-pages{gap:1px}.pilot-ui-page-slots{gap:1px}.pilot-ui-page-count{font-size:11px}}
+@media(max-width:460px){#crm-api-range-popup.pilot-ui-calendar{padding:10px}.pilot-ui-date-pills>div{padding:8px}.pilot-ui-date-pills b{font-size:12px}.pilot-ui-file-icon{display:none}}
+@keyframes pilot-ui-file-pulse{to{opacity:.4}}@keyframes pilot-ui-tooltip-in{from{opacity:0;translate:0 3px}to{opacity:1;translate:0 0}}@keyframes pilot-ui-page-in{from{scale:.92}to{scale:1}}
+body.reduced-motion :is(.pilot-ui-drop,.pilot-ui-file-icon,.pilot-ui-tooltip,.pilot-ui-page,.pilot-ui-calendar *),body.reduced-motion :is(#content,#modal) :is(input,textarea,select){animation:none!important;transition:none!important}
+@media(prefers-reduced-motion:reduce){:is(.pilot-ui-drop,.pilot-ui-file-icon,.pilot-ui-tooltip,.pilot-ui-page,.pilot-ui-calendar *),.pilot-ui-enabled :is(#content,#modal) :is(input,textarea,select){animation:none!important;transition:none!important}}

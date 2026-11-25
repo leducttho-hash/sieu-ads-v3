@@ -47,11 +47,16 @@ const controlsAddon=await readFile(resolve(here,'pilot-controls.js'),'utf8');
 crmReplace("document.addEventListener('click',e=>{if(!e.target.closest('details.inline-menu'))",controlsAddon+"\ndocument.addEventListener('click',e=>{if(!e.target.closest('details.inline-menu'))");
 crmReplace('await navigator.clipboard.write([new ClipboardItem','await pilotFeedbackClipboardWrite([new ClipboardItem');
 crmReplace('</head>','<link rel="stylesheet" href="/pilot-controls.css?v=1"></head>');
+// Remaining bounded input presentation: preserve the original app/CRM behavior underneath.
+const inputsAddon=await readFile(resolve(here,'pilot-inputs.js'),'utf8');
+crmReplace("document.addEventListener('click',e=>{if(!e.target.closest('details.inline-menu'))",inputsAddon+"\ndocument.addEventListener('click',e=>{if(!e.target.closest('details.inline-menu'))");
+crmReplace('</head>','<link rel="stylesheet" href="/pilot-inputs.css?v=1"></head>');
 await rm(out,{recursive:true,force:true});await mkdir(out,{recursive:true});
 await writeFile(resolve(out,'index.html'),html);
 await copyFile(resolve(here,'backend-client.js'),resolve(out,'backend-client.js'));
 await copyFile(resolve(here,'crm-api-panel.css'),resolve(out,'crm-api-panel.css'));
 await copyFile(resolve(here,'pilot-controls.css'),resolve(out,'pilot-controls.css'));
+await copyFile(resolve(here,'pilot-inputs.css'),resolve(out,'pilot-inputs.css'));
 await copyFile(resolve(here,'LUCIAN-LICENSE.txt'),resolve(out,'LUCIAN-LICENSE.txt'));
 for(const asset of ['excel-preview-worker.js','vendor-exceljs-4.4.0.min.js','EXCELJS-LICENSE.txt'])await copyFile(resolve(root,asset),resolve(out,asset));
 await cp(resolve(here,'pages'),out,{recursive:true});
