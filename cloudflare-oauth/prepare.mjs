@@ -42,10 +42,17 @@ crmReplace("a=C.parseDelimitedMatrix(r.crmPaste,'\\t');if(!a.length)return[];", 
 crmReplace('function switchScope(type,value){sheetScopeEpoch++;', 'function switchScope(type,value){crmApiInvalidate();sheetScopeEpoch++;');
 crmReplace("document.addEventListener('click',e=>{if(!e.target.closest('details.inline-menu'))", crmAddon+"\ndocument.addEventListener('click',e=>{if(!e.target.closest('details.inline-menu'))");
 crmReplace('</head>','<link rel="stylesheet" href="/crm-api-panel.css?v=personnel-v2"></head>');
+// Scoped feedback for existing export/copy operations and source tabs only.
+const controlsAddon=await readFile(resolve(here,'pilot-controls.js'),'utf8');
+crmReplace("document.addEventListener('click',e=>{if(!e.target.closest('details.inline-menu'))",controlsAddon+"\ndocument.addEventListener('click',e=>{if(!e.target.closest('details.inline-menu'))");
+crmReplace('await navigator.clipboard.write([new ClipboardItem','await pilotFeedbackClipboardWrite([new ClipboardItem');
+crmReplace('</head>','<link rel="stylesheet" href="/pilot-controls.css?v=1"></head>');
 await rm(out,{recursive:true,force:true});await mkdir(out,{recursive:true});
 await writeFile(resolve(out,'index.html'),html);
 await copyFile(resolve(here,'backend-client.js'),resolve(out,'backend-client.js'));
 await copyFile(resolve(here,'crm-api-panel.css'),resolve(out,'crm-api-panel.css'));
+await copyFile(resolve(here,'pilot-controls.css'),resolve(out,'pilot-controls.css'));
+await copyFile(resolve(here,'LUCIAN-LICENSE.txt'),resolve(out,'LUCIAN-LICENSE.txt'));
 for(const asset of ['excel-preview-worker.js','vendor-exceljs-4.4.0.min.js','EXCELJS-LICENSE.txt'])await copyFile(resolve(root,asset),resolve(out,asset));
 await cp(resolve(here,'pages'),out,{recursive:true});
 console.log('Prepared isolated OAuth pilot; original index.html unchanged.');
