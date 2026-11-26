@@ -144,6 +144,31 @@ function pilotUiCalendarKey(event){
   if(['PageUp','PageDown'].includes(event.key)){const month=crmApiRangeMonth(day.slice(0,7),event.key==='PageUp'?-1:1),last=Number(crmApiShiftDay(crmApiRangeMonth(month,1)+'-01',-1).slice(8));next=month+'-'+String(Math.min(Number(day.slice(8)),last)).padStart(2,'0');}
   if(!next)return;event.preventDefault();pilotUiRangeFocus(next>crmApiToday()?crmApiToday():next);
 }
+function pilotUiCaptionLinkLabel(caption){
+  const count=C.detectConsecutiveLinks(caption);if(count<2)return '';
+  const start=C.detectConsecutiveLinkStartNumber(caption);
+  return count+' link · '+(start?'Bắt đầu '+start:'Chưa xác định số bắt đầu');
+}
+function pilotUiCaptionLinksRefresh(){
+  if(ui.view!=='daily'||db.session.channel!=='CD')return;
+  const buttons=Array.from(document.querySelectorAll('.daily-output [data-action="body"]'));if(!buttons.length)return;
+  const rows=new Map(compute().map(row=>[row.id,row]));
+  for(const button of buttons){
+    let rowId;try{rowId=JSON.parse(decodeURIComponent(button.dataset.args||'')).row;}catch{continue;}
+    const text=pilotUiCaptionLinkLabel(rows.get(rowId)?.caption||'');
+    let label=button.parentElement.querySelector('.pilot-ui-caption-links');
+    if(!label&&text){label=document.createElement('small');label.className='pilot-ui-caption-links';button.insertAdjacentElement('afterend',label);}
+    if(label){label.textContent=text;label.hidden=!text;}
+  }
+}
+function pilotUiBodyLinksRefresh(editor){
+  if(!editor||editor.dataset.pilotCaptionScope!==capture()||db.session.channel!=='CD')return;
+  let label=editor.parentElement.querySelector('.pilot-ui-body-links');
+  if(!label){label=document.createElement('p');label.className='pilot-ui-body-links';label.setAttribute('role','status');label.setAttribute('aria-live','polite');editor.insertAdjacentElement('beforebegin',label);}
+  const text=pilotUiCaptionLinkLabel(editor.value);label.textContent=text;label.hidden=!text;
+  const preview=editor.parentElement.querySelector('details pre');
+  if(preview)preview.textContent=C.replaceLinksSmart(editor.value,editor.dataset.pilotCaptionShortUrl||'');
+}
 const pilotUiOriginalPerform=perform;
 perform=async function(action,a={},el){
   if(action==='pilot-ui-crm-page'){
@@ -154,6 +179,10 @@ perform=async function(action,a={},el){
   if(action==='crm-api-open-range')pilotUiCalendarFocus='';
   if(action==='crm-api-range-day')pilotUiCalendarFocus=a.day;
   const value=await pilotUiOriginalPerform(action,a,el);
+  if(action==='body'&&db.session.channel==='CD'){
+    const editor=document.getElementById('body-edit'),row=compute().find(row=>row.id===a.row);
+    if(editor&&row){editor.dataset.pilotCaptionScope=capture();editor.dataset.pilotCaptionShortUrl=row.shortUrl||'';pilotUiBodyLinksRefresh(editor);}
+  }
   if(action==='crm-api-open-range'){const popup=document.querySelector('#crm-api-range-popup');popup?.querySelector('.crm-range-day[tabindex="0"]')?.focus({preventScroll:true});}
   if(['crm-api-range-day','crm-api-range-nav'].includes(action)){
     if(action==='crm-api-range-nav'){const first=pilotUiCalendarButtons().find(b=>!b.disabled&&!b.classList.contains('outside-month'));pilotUiCalendarFocus=first?pilotUiRangeDay(first):'';pilotUiRangeDecorate();}
@@ -165,11 +194,16 @@ perform=async function(action,a={},el){
 function pilotUiRefresh(){
   document.body.classList.add('pilot-ui-enabled');pilotUiUploadSync();
   for(const button of document.querySelectorAll('#content button,#modal button'))pilotUiIconName(button);
+  pilotUiCaptionLinksRefresh();
 }
 const pilotUiOriginalRender=render;
 render=function(...values){pilotUiTooltipHide();const value=pilotUiOriginalRender(...values);pilotUiRefresh();return value;};
+const pilotUiCaptionOriginalUpdateDailyRow=updateDailyRowInPlace;
+updateDailyRowInPlace=function(...values){const value=pilotUiCaptionOriginalUpdateDailyRow(...values);pilotUiCaptionLinksRefresh();return value;};
+const pilotUiCaptionOriginalRefreshDaily=refreshDailyTableOnly;
+refreshDailyTableOnly=function(...values){const value=pilotUiCaptionOriginalRefreshDaily(...values);pilotUiCaptionLinksRefresh();return value;};
 document.addEventListener('focusout',e=>{pilotUiFieldTouch(e.target);if(e.target===pilotUiTooltipMuted)pilotUiTooltipMuted=null;if(e.target===pilotUiTooltipTarget)pilotUiTooltipHide();});
-document.addEventListener('input',e=>{if(e.target.classList?.contains('pilot-ui-touched'))pilotUiFieldTouch(e.target);});
+document.addEventListener('input',e=>{if(e.target.classList?.contains('pilot-ui-touched'))pilotUiFieldTouch(e.target);if(e.target.id==='body-edit')pilotUiBodyLinksRefresh(e.target);});
 document.addEventListener('focusin',e=>{const button=e.target.closest?.('button,summary,[role="button"]');if(button)pilotUiTooltipWant(button,true);});
 document.addEventListener('pointerover',e=>{
   const button=e.target.closest?.('button,summary,[role="button"]');if(button&&!button.contains(e.relatedTarget)&&e.pointerType!=='touch')pilotUiTooltipWant(button);

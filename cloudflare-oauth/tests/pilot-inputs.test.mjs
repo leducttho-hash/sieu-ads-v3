@@ -5,6 +5,7 @@ import {readFileSync} from 'node:fs';
 
 const code=readFileSync(new URL('../pilot-inputs.js',import.meta.url),'utf8');
 const crm=readFileSync(new URL('../crm-api-panel.js',import.meta.url),'utf8');
+const root=readFileSync(new URL('../../index.html',import.meta.url),'utf8');
 function fn(source,name){const m=new RegExp('^function '+name+'\\(','m').exec(source);assert(m,name);const rest=source.slice(m.index),line=rest.indexOf('\n'),next=rest.slice(line+1).search(/^(?:function |const |let |document\.|window\.)/m);return next<0?rest:rest.slice(0,line+1+next);}
 function fixture(options={}){
   const state={previewPage:0,previewQuery:'',cache:{tsv:'unchanged'},startDate:'2026-11-15',endDate:'2026-11-21'},calls=[],events={},rows=Array.from({length:135},(_,i)=>({code:'QA'+i}));let scope='scope-A';
@@ -12,12 +13,14 @@ function fixture(options={}){
   const ctx=vm.createContext({console,Date,URL,encodeURIComponent,decodeURIComponent,setTimeout,clearTimeout,
     capture:()=>scope,ui:{view:'report',page:1,size:50},pendingImports:[],document,window:{addEventListener(){}},
     args:x=>encodeURIComponent(JSON.stringify(x)),esc:x=>String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'),
-    render:()=>calls.push('render'),perform:async(...x)=>{calls.push(x);return 'original-result'},pager:()=>'',
+    render:()=>calls.push('render'),perform:async(...x)=>{calls.push(x);return 'original-result'},pager:()=>'',updateDailyRowInPlace:()=>{},refreshDailyTableOnly:()=>{},
     selectFiles:options.selectFiles||(async()=>{}),confirmImport:options.confirmImport||(async p=>{ctx.pendingImports.splice(ctx.pendingImports.indexOf(p),1)}),
     crmApiPreviewResults:d=>{const count=d.crm.filter(r=>!state.previewQuery||r.code.includes(state.previewQuery)).length;state.previewPage=Math.min(state.previewPage,Math.max(1,Math.ceil(count/20))-1);return '<div class="crm-api-preview-scroll">TABLE</div>'+(count>20?'<div class="crm-api-preview-pager">OLD</div>':'')},
     crmApiState:()=>state,crmApiRangeDraft:null,crmApiRangeRender:()=>{},crmApiToday:()=> '2026-11-26',crmApiDateLabel:x=>x,
     reportData:()=>({crm:rows})});
   for(const name of ['crmApiShiftDay','crmApiRangeMonth'])vm.runInContext(fn(crm,name),ctx);
+  const linkFns=['detectConsecutiveLinks','detectConsecutiveLinkStartNumber'];
+  vm.runInContext(linkFns.map(name=>fn(root.replace(/^  /gm,''),name)).join('\n')+'\nconst C={'+linkFns.join(',')+'};',ctx);
   vm.runInContext(code,ctx);
   return {ctx,state,calls,events,rows,setScope(value){scope=value;},getUploads:()=>vm.runInContext('[...pilotUiUploads.values()]',ctx)};
 }
@@ -73,4 +76,12 @@ test('existing actions, options and operation results pass through unchanged',as
 test('presentation build is isolated and has no new network, polling, runtime dependency or validation engine',()=>{
   const prepare=readFileSync(new URL('../prepare.mjs',import.meta.url),'utf8'),css=readFileSync(new URL('../pilot-inputs.css',import.meta.url),'utf8');
   assert(prepare.includes("readFile(resolve(here,'pilot-inputs.js')"));assert(prepare.includes("copyFile(resolve(here,'pilot-inputs.css')"));assert(!code.includes('fetch('));assert(!code.includes('crmApiSend('));assert(!code.includes('setInterval('));assert(!css.includes(':root'));assert(css.includes('prefers-reduced-motion:reduce'));assert(css.includes('body.reduced-motion'));
+});
+test('caption summaries use the existing engine for count/start and suppress empty or single-link notices',()=>{
+ const {ctx}=fixture(),caption=Array.from({length:6},(_,i)=>'- Nhận ưu đãi khối '+(i+4)+': [LINK]').join('\n');
+ assert.equal(ctx.pilotUiCaptionLinkLabel(caption),'6 link · Bắt đầu 4');
+ assert.equal(ctx.pilotUiCaptionLinkLabel(''), '');assert.equal(ctx.pilotUiCaptionLinkLabel('Đăng ký [Link]'),'');
+ assert.equal(ctx.pilotUiCaptionLinkLabel('[LINK]\n[ link ]'),'2 link · Chưa xác định số bắt đầu');
+ assert.equal(ctx.pilotUiCaptionLinkLabel('Khối 8: [link]\nKhối 9: [link]'),'2 link · Bắt đầu 8');
+ assert.equal(ctx.pilotUiCaptionLinkLabel('https://example.test/L4\nhttps://example.test/L5'),'');
 });

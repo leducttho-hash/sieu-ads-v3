@@ -56,5 +56,8 @@
 @media(max-width:600px){.pilot-ui-pages .pilot-ui-page,.pilot-ui-page-dots{flex-basis:23px;width:23px;min-width:23px;font-size:11px}.pilot-ui-pages{gap:1px}.pilot-ui-page-slots{gap:1px}.pilot-ui-page-count{font-size:11px}}
 @media(max-width:460px){#crm-api-range-popup.pilot-ui-calendar{padding:10px}.pilot-ui-date-pills>div{padding:8px}.pilot-ui-date-pills b{font-size:12px}.pilot-ui-file-icon{display:none}}
 @keyframes pilot-ui-file-pulse{to{opacity:.4}}@keyframes pilot-ui-tooltip-in{from{opacity:0;translate:0 3px}to{opacity:1;translate:0 0}}@keyframes pilot-ui-page-in{from{scale:.92}to{scale:1}}
+.daily-output .pilot-ui-caption-links{display:block;margin-top:5px;color:var(--accent);font-size:11px;line-height:1.4;white-space:nowrap;font-variant-numeric:tabular-nums}
+#modal .pilot-ui-body-links{margin:0 0 10px;padding:8px 11px;border:1px solid var(--border);border-radius:8px;background:var(--pilot-ui-soft);color:var(--text);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.pilot-ui-caption-links[hidden],#modal .pilot-ui-body-links[hidden]{display:none}
 body.reduced-motion :is(.pilot-ui-drop,.pilot-ui-file-icon,.pilot-ui-tooltip,.pilot-ui-page,.pilot-ui-calendar *),body.reduced-motion :is(#content,#modal) :is(input,textarea,select){animation:none!important;transition:none!important}
 @media(prefers-reduced-motion:reduce){:is(.pilot-ui-drop,.pilot-ui-file-icon,.pilot-ui-tooltip,.pilot-ui-page,.pilot-ui-calendar *),.pilot-ui-enabled :is(#content,#modal) :is(input,textarea,select){animation:none!important;transition:none!important}}
