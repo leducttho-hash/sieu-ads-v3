@@ -11,18 +11,27 @@ function pilotFeedbackContext(){return JSON.stringify([capture(),ui.view]);}
 function pilotFeedbackButtonKey(button){return JSON.stringify([button.dataset.action,button.dataset.args||'']);}
 function pilotFeedbackLater(fn,ms){const timer=setTimeout(()=>{pilotFeedbackTimers.delete(timer);fn();},ms);pilotFeedbackTimers.add(timer);return timer;}
 function pilotFeedbackPaint(button,record,busy,kind=pilotFeedbackKind(button.dataset.action)){
-  if(!button.classList.contains('pilot-feedback-btn')){
+  // Daily's partial updates replace button.textContent but retain its classes.
+  // Repair the child structure independently of the initial disabled/aria state.
+  let labelElement=button.querySelector('.pilot-feedback-label');
+  if(!labelElement){
+    button.querySelector('.pilot-feedback-motion')?.remove();
     const label=document.createElement('span');label.className='pilot-feedback-label';
     while(button.firstChild)label.append(button.firstChild);
-    button.append(label);
+    button.append(label);labelElement=label;
+  }
+  if(!button.querySelector('.pilot-feedback-motion')){
     const motion=document.createElement('span');motion.className='pilot-feedback-motion';motion.setAttribute('aria-hidden','true');
     motion.innerHTML='<i class="pilot-feedback-spinner"></i><span class="pilot-feedback-check">'+pilotFeedbackIcon+'</span><i class="pilot-feedback-ring"></i>';
-    button.append(motion);button.classList.add('pilot-feedback-btn');
+    button.append(motion);
+  }
+  if(!button.classList.contains('pilot-feedback-btn')){
+    button.classList.add('pilot-feedback-btn');
     button.dataset.pilotOriginalDisabled=String(button.disabled);
     if(button.hasAttribute('aria-label'))button.dataset.pilotOriginalAria=button.getAttribute('aria-label');
   }
   button.classList.remove('pilot-feedback-download','pilot-feedback-copy');button.classList.add('pilot-feedback-'+kind);
-  const label=button.querySelector('.pilot-feedback-label').textContent.trim(),state=record?.state||'idle';
+  const label=labelElement.textContent.trim(),state=record?.state||'idle';
   button.dataset.pilotFeedbackState=state;
   button.style.setProperty('--pilot-feedback-size',(button.offsetHeight||33)+'px');
   button.disabled=button.dataset.pilotOriginalDisabled==='true'||!!busy;
@@ -71,9 +80,10 @@ perform=async function(action,a={},el){
   const key=JSON.stringify([context,pilotFeedbackButtonKey(el)]),prior=pilotFeedbackStates.get(key);
   if(prior?.timer){clearTimeout(prior.timer);pilotFeedbackTimers.delete(prior.timer);}
   const record={context,kind,state:'busy',effects:0,timer:null,dropdown:!!el.closest('details.export-dropdown')};
-  pilotFeedbackJobs.set(jobKey,record);pilotFeedbackStates.set(key,record);pilotFeedbackSync();
-  pilotFeedbackAnnounce(kind==='download'?'Đang tạo file…':'Đang copy…');
+  pilotFeedbackJobs.set(jobKey,record);pilotFeedbackStates.set(key,record);
   try{
+    pilotFeedbackSync();
+    pilotFeedbackAnnounce(kind==='download'?'Đang tạo file…':'Đang copy…');
     // Give the browser a paint opportunity before XLSX work, without delaying clipboard activation.
     if(kind==='download')await pilotFeedbackFrame();
     if(context!==pilotFeedbackContext())return;
@@ -129,6 +139,12 @@ function pilotSegmentsSync(){
 function pilotControlsRefresh(){pilotFeedbackSync();pilotSegmentsSync();}
 const pilotControlsOriginalRender=render;
 render=function(...values){const result=pilotControlsOriginalRender(...values);pilotControlsRefresh();return result;};
+// Reapply feedback after the existing incremental Daily updates, without changing
+// their row selection, Page mapping, URL data or focus handling.
+const pilotControlsOriginalUpdateDailyRow=updateDailyRowInPlace;
+updateDailyRowInPlace=function(...values){const result=pilotControlsOriginalUpdateDailyRow(...values);pilotFeedbackSync();return result;};
+const pilotControlsOriginalRefreshDailyTable=refreshDailyTableOnly;
+refreshDailyTableOnly=function(...values){const result=pilotControlsOriginalRefreshDailyTable(...values);pilotFeedbackSync();return result;};
 document.addEventListener('keydown',event=>{
   if(event.altKey||event.ctrlKey||event.metaKey||event.shiftKey)return;
   const button=event.target.closest?.('.pilot-segments > button[data-action]'),group=button?.parentElement;if(!group)return;

@@ -15,9 +15,10 @@ class Element{
  get className(){return [...this.classes].join(' ');}
  get firstChild(){return this.children[0]||null;}
  get textContent(){return this._text+this.children.map(el=>el.textContent).join('');}
- set textContent(value){this._text=value;this.children=[];}
+ set textContent(value){this._text='';this.children=[];if(value)this.append(new Element('span',value));}
  set innerHTML(value){this._html=value;this.children=[];}
  append(child){if(child.parentElement){const siblings=child.parentElement.children;siblings.splice(siblings.indexOf(child),1);}child.parentElement=this;this.children.push(child);}
+ remove(){if(this.parentElement){const siblings=this.parentElement.children;siblings.splice(siblings.indexOf(this),1);this.parentElement=null;}}
  insertBefore(child,before){child.parentElement=this;this.children.splice(this.children.indexOf(before),0,child);}
  setAttribute(k,v){this.attributes.set(k,String(v));if(k==='id')this.id=v;}
  getAttribute(k){return this.attributes.get(k)??null;}
@@ -37,7 +38,7 @@ function fixture(){
   querySelector:()=>null,getElementById:id=>body.children.find(el=>el.id===id)||null,
   addEventListener:(type,fn)=>events[type]=fn};
  const ctx=vm.createContext({document,window:{addEventListener:(type,fn)=>windowEvents[type]=fn},navigator:{clipboard:{write:async()=>{}}},
-  ui:{view:'report'},capture:()=>scope,render:()=>{},copyText:async text=>{if(!text)throw Error('Không có dữ liệu để copy');},
+  ui:{view:'report'},capture:()=>scope,render:()=>{},updateDailyRowInPlace:()=>{const el=buttons.find(b=>b.dataset.action==='copy-posts');if(el)el.textContent='Copy Link (1/2)';return 'row-updated';},refreshDailyTableOnly:()=>{const el=buttons.find(b=>b.dataset.action==='copy-posts');if(el)el.textContent='Copy Link (2/2)';return 'table-updated';},copyText:async text=>{if(!text)throw Error('Không có dữ liệu để copy');},
   perform:async(...args)=>{calls.push(args);return handler(...args);},setTimeout,clearTimeout,requestAnimationFrame:fn=>setTimeout(fn,0),cancelAnimationFrame:clearTimeout,Map,Set,JSON,Array,String});
  vm.runInContext(source,ctx);
  function button(action='export-report',args='',label='Xuất XLSX'){
@@ -80,6 +81,36 @@ test('copy feedback waits for clipboard confirmation and reports rejection, incl
 });
 test('copy operation that warns and returns without copying never shows a success check',async()=>{
  const f=fixture(),button=f.button('copy-posts');try{await f.ctx.perform('copy-posts',{},button);assert.equal(f.state(button),'idle');assert(!f.status().includes('Đã copy'));}finally{f.dispose();}
+});
+test('Daily partial row and table updates keep summary feedback intact and row URL copies repeatable',async()=>{
+ const f=fixture(),summary=f.button('copy-posts','','Copy Link (0/2)'),button=f.button('copy','original-url','Copy'),url='https://example.test/landing?utm_medium=ABC8B-L12';
+ try{
+  f.ctx.render();f.handler((action,args)=>f.ctx.copyText(args.text));
+  for(const [update,label]of [['updateDailyRowInPlace','Copy Link (1/2)'],['refreshDailyTableOnly','Copy Link (2/2)']]){
+   f.ctx[update]('row-id');assert.equal(summary.querySelector('.pilot-feedback-label').textContent,label);
+   await f.ctx.perform('copy',{text:url},button);await f.ctx.perform('copy',{text:url},button);
+   assert.equal(f.state(button),'ok');assert(!button.disabled);assert(!summary.disabled);
+  }
+  assert.equal(f.calls.length,4);assert(f.calls.every(([,args])=>args.text===url));
+ }finally{f.dispose();}
+});
+test('a decorated sibling with deleted children repairs itself without copying the wrong text or staying disabled',async()=>{
+ const f=fixture(),summary=f.button('copy-posts'),button=f.button('copy'),disabled=f.button('copy-build');disabled.disabled=true;
+ try{
+  f.ctx.render();summary.textContent='Copy Link (3/4)';disabled.textContent='Copy ADS';
+  f.handler((action,args)=>f.ctx.copyText(args.text));await f.ctx.perform('copy',{text:'original URL'},button);
+  assert.equal(summary.querySelector('.pilot-feedback-label').textContent,'Copy Link (3/4)');assert(!summary.disabled);assert(disabled.disabled);
+  summary.querySelector('.pilot-feedback-label').remove();f.ctx.render();assert(summary.querySelector('.pilot-feedback-label'));assert.equal(summary.children.filter(el=>el.classList.contains('pilot-feedback-motion')).length,1);
+  button.querySelector('.pilot-feedback-motion').remove();await f.ctx.perform('copy',{text:'second URL'},button);assert.equal(f.calls.length,2);assert(!button.disabled);
+ }finally{f.dispose();}
+});
+test('an error while starting feedback releases the copy lock and allows retry',async()=>{
+ const f=fixture(),button=f.button('copy'),sync=f.ctx.pilotFeedbackSync;let fail=true;
+ try{
+  f.ctx.pilotFeedbackSync=()=>{if(fail){fail=false;throw Error('feedback startup failed');}return sync();};
+  await assert.rejects(f.ctx.perform('copy',{text:'URL'},button),/feedback startup failed/);assert.equal(f.calls.length,0);assert(!button.disabled);
+  f.handler((action,args)=>f.ctx.copyText(args.text));await f.ctx.perform('copy',{text:'same URL'},button);assert.equal(f.calls.length,1);assert.equal(f.state(button),'ok');
+ }finally{f.dispose();}
 });
 test('rerender preserves busy feedback, business-disabled buttons and original accessible labels',async()=>{
  const f=fixture(),button=f.button(),work=deferred();
