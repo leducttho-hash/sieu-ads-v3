@@ -11,6 +11,7 @@ function pilotFeedbackContext(){return JSON.stringify([capture(),ui.view]);}
 function pilotFeedbackButtonKey(button){return JSON.stringify([button.dataset.action,button.dataset.args||'']);}
 function pilotFeedbackLater(fn,ms){const timer=setTimeout(()=>{pilotFeedbackTimers.delete(timer);fn();},ms);pilotFeedbackTimers.add(timer);return timer;}
 function pilotFeedbackPaint(button,record,busy,kind=pilotFeedbackKind(button.dataset.action)){
+  if(button.dataset.action==='copy'&&button.closest?.('.daily-output tr[data-row-id]')&&button.closest?.('.inline-link')&&button.dataset.pilotDailyCopyScope===undefined)button.dataset.pilotDailyCopyScope=capture();
   // Daily's partial updates replace button.textContent but retain its classes.
   // Repair the child structure independently of the initial disabled/aria state.
   let labelElement=button.querySelector('.pilot-feedback-label');
@@ -72,9 +73,22 @@ function pilotFeedbackFrame(){return new Promise(resolve=>{
   const timer=setTimeout(finish,80);frame=requestAnimationFrame(()=>setTimeout(finish,0));
 });}
 const pilotControlsOriginalPerform=perform;
+function pilotDailyLandingCopyArgs(action,a,button){
+  if(action!=='copy'||!button?.closest?.('.inline-link'))return a;
+  const tr=button.closest('.daily-output tr[data-row-id]');if(!tr)return a;
+  if(!button.isConnected||ui.view!=='daily'||db.session.channel!=='CD'||button.dataset.pilotDailyCopyScope!==undefined&&button.dataset.pilotDailyCopyScope!==capture())throw Error('Dòng Daily đã thay đổi. Mở lại đúng hồ sơ/Kho rồi copy.');
+  const row=compute().find(item=>item.id===tr.dataset.rowId);
+  if(!row)throw Error('Không còn dòng Daily này. Kiểm tra lại mã đang nhập.');
+  if(!row.selected)throw Error('Dòng này đang bỏ tích. Tích chọn dòng để tạo và copy link gốc.');
+  const text=String(row.landingUrl||'');
+  if(!text.trim())throw Error('Dòng đã chọn chưa có link gốc. '+(row.errors?.join(' · ')||'Kiểm tra môn và link Ladi trong cấu hình Kho.'));
+  // Partial Daily refreshes update the input but previously left this cached payload stale.
+  const current={...a,text};button.dataset.args=encodeURIComponent(JSON.stringify(current));return current;
+}
 perform=async function(action,a={},el){
   const kind=pilotFeedbackKind(action);
   if(!kind||!el?.matches?.('[data-action]'))return pilotControlsOriginalPerform(action,a,el);
+  a=pilotDailyLandingCopyArgs(action,a,el);
   const context=pilotFeedbackContext(),jobKey=context+'|'+kind;
   if(pilotFeedbackJobs.has(jobKey))return;
   const key=JSON.stringify([context,pilotFeedbackButtonKey(el)]),prior=pilotFeedbackStates.get(key);

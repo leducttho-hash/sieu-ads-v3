@@ -50,6 +50,31 @@ function fixture(){
   scope:value=>scope=value,handler:fn=>handler=fn,dispose:()=>windowEvents.pagehide()};
 }
 function deferred(){let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};}
+function dailyCopyFixture(row){
+ const f=fixture(),button=f.button('copy',encodeURIComponent(JSON.stringify({text:''})),'Copy'),tr=new Element('tr');tr.dataset.rowId='row-1';
+ button.closest=selector=>selector==='.inline-link'?new Element('div'):selector==='.daily-output tr[data-row-id]'?tr:null;
+ f.ctx.ui.view='daily';f.ctx.db={session:{channel:'CD'}};f.ctx.compute=()=>row?[row]:[];f.ctx.render();
+ f.handler((action,args)=>f.ctx.copyText(args.text));return {...f,button,tr};
+}
+test('Daily copy reads the currently selected row instead of a cached empty URL',async()=>{
+ const url='https://example.test/toan?utm_medium=ABC8B-PXN',f=dailyCopyFixture({id:'row-1',selected:true,landingUrl:url});
+ try{await f.ctx.perform('copy',{text:''},f.button);assert.equal(f.calls[0][1].text,url);assert.equal(JSON.parse(decodeURIComponent(f.button.dataset.args)).text,url);assert.equal(f.state(f.button),'ok');}finally{f.dispose();}
+});
+test('Daily copy uses a changed subject/suffix URL instead of the old nonempty payload',async()=>{
+ const url='https://example.test/khtn?utm_medium=ABCTET-L12',f=dailyCopyFixture({id:'row-1',selected:true,landingUrl:url});
+ try{await f.ctx.perform('copy',{text:'https://example.test/old-PXN'},f.button);assert.equal(f.calls[0][1].text,url);assert.equal(f.state(f.button),'ok');}finally{f.dispose();}
+});
+test('unchecked, missing or invalid Daily rows cannot copy stale URLs or show success',async()=>{
+ for(const row of [null,{id:'row-1',selected:false,landingUrl:''},{id:'row-1',selected:true,landingUrl:'',errors:['Môn chưa có link']}]){
+  const f=dailyCopyFixture(row);try{await assert.rejects(f.ctx.perform('copy',{text:'https://example.test/stale'},f.button),/Daily|tích|link/);assert.equal(f.calls.length,0);assert.notEqual(f.state(f.button),'ok');assert(!f.button.disabled);}finally{f.dispose();}
+ }
+});
+test('a Daily Copy button from another scope or detached row cannot copy even if row IDs coincide',async()=>{
+ const f=dailyCopyFixture({id:'row-1',selected:true,landingUrl:'https://example.test/other-scope'});
+ try{f.scope('B|W2|CD|1');await assert.rejects(f.ctx.perform('copy',{},f.button),/thay đổi/);assert.equal(f.calls.length,0);
+  f.scope('A|W1|CD|1');f.button.isConnected=false;await assert.rejects(f.ctx.perform('copy',{},f.button),/thay đổi/);assert.equal(f.calls.length,0);
+ }finally{f.dispose();}
+});
 
 test('export stays busy until the actual operation resolves; repeated exports are blocked',async()=>{
  const f=fixture(),work=deferred(),button=f.button(),other=f.button('export-report-tsv');
@@ -57,7 +82,7 @@ test('export stays busy until the actual operation resolves; repeated exports ar
   f.handler(()=>work.promise);const running=f.ctx.perform('export-report',{header:false},button);
   assert.equal(f.state(button),'busy');assert(button.disabled);assert(other.disabled);
   await f.ctx.perform('export-report-tsv',{},other);
-  await new Promise(resolve=>setTimeout(resolve,15));assert.equal(f.calls.length,1);assert.equal(f.state(button),'busy');assert(!f.status().includes('Đã tạo'));
+  for(let i=0;i<100&&!f.calls.length;i++)await new Promise(resolve=>setTimeout(resolve,2));assert.equal(f.calls.length,1);assert.equal(f.state(button),'busy');assert(!f.status().includes('Đã tạo'));
   work.resolve('workbook');assert.equal(await running,'workbook');assert.equal(f.state(button),'ok');assert(!button.disabled);assert(!other.disabled);assert.equal(f.status(),'Đã tạo file.');
  }finally{f.dispose();}
 });
